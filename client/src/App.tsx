@@ -10,6 +10,7 @@ import NptReports from "@/pages/npt-reports";
 import FileUpload from "@/pages/file-upload";
 import Approvals from "@/pages/approvals";
 import Settings from "@/pages/settings";
+import Reports from "@/pages/reports";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -25,6 +26,7 @@ function Router() {
           <Route path="/npt-reports" component={NptReports} />
           <Route path="/file-upload" component={FileUpload} />
           <Route path="/approvals" component={Approvals} />
+          <Route path="/reports" component={Reports} />
           <Route path="/settings" component={Settings} />
         </>
       )}

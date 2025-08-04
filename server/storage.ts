@@ -21,6 +21,7 @@ import {
   type ActionParty,
   type InsertActionParty,
 } from "@shared/schema";
+import type { BillingSheetUpload, BillingUploadResult } from "@shared/billingTypes";
 import { db } from "./db";
 import { eq, desc, and, or, count } from "drizzle-orm";
 
@@ -38,7 +39,7 @@ export interface IStorage {
   getNptReports(filters?: { rigId?: number; userId?: string; status?: string }): Promise<NptReport[]>;
   getNptReport(id: number): Promise<NptReport | undefined>;
   createNptReport(report: InsertNptReport): Promise<NptReport>;
-  updateNptReport(id: number, report: Partial<InsertNptReport>): Promise<NptReport>;
+  updateNptReport(id: number, report: Partial<NptReport>): Promise<NptReport>;
   deleteNptReport(id: number): Promise<void>;
   
   // Dashboard stats
@@ -65,6 +66,12 @@ export interface IStorage {
   getActionParties(): Promise<ActionParty[]>;
   createActionParty(actionParty: InsertActionParty): Promise<ActionParty>;
   deleteActionParty(id: number): Promise<void>;
+  
+  // Billing upload operations
+  saveBillingUpload(upload: { fileName: string; uploadedBy: string; status: string; result: BillingUploadResult }): Promise<void>;
+  getBillingUploads(): Promise<any[]>;
+  getRigByNumber(rigNumber: number): Promise<Rig | undefined>;
+  getSystemByName(name: string): Promise<System | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -139,11 +146,11 @@ export class DatabaseStorage implements IStorage {
     return newReport;
   }
   
-  async updateNptReport(id: number, report: Partial<InsertNptReport>): Promise<NptReport> {
+  async updateNptReport(id: number, report: Partial<NptReport>): Promise<NptReport> {
     let updateData: any = { ...report, updatedAt: new Date() };
     
-    // Convert hours to string if provided
-    if (report.hours !== undefined) {
+    // Convert hours to string if provided and it's a number
+    if (report.hours !== undefined && typeof report.hours === 'number') {
       updateData.hours = report.hours.toString();
     }
     
@@ -295,6 +302,27 @@ export class DatabaseStorage implements IStorage {
   
   async deleteActionParty(id: number): Promise<void> {
     await db.update(actionParties).set({ isActive: false }).where(eq(actionParties.id, id));
+  }
+
+  // Billing upload operations
+  async saveBillingUpload(upload: { fileName: string; uploadedBy: string; status: string; result: BillingUploadResult }): Promise<void> {
+    // For now, store in memory - in production, this would be a database table
+    console.log('Billing upload saved:', upload.fileName, upload.status);
+  }
+
+  async getBillingUploads(): Promise<any[]> {
+    // For now, return empty array - in production, this would query the database
+    return [];
+  }
+
+  async getRigByNumber(rigNumber: number): Promise<Rig | undefined> {
+    const [rig] = await db.select().from(rigs).where(eq(rigs.rigNumber, rigNumber));
+    return rig;
+  }
+
+  async getSystemByName(name: string): Promise<System | undefined> {
+    const [system] = await db.select().from(systems).where(eq(systems.name, name));
+    return system;
   }
 }
 

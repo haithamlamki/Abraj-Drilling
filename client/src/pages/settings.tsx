@@ -1,25 +1,28 @@
-import { useEffect, useState } from "react";
-import { useAuth } from "@/hooks/useAuth";
+import { useState, useEffect } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@/hooks/useAuth";
 import { apiRequest } from "@/lib/queryClient";
-import { isUnauthorizedError } from "@/lib/authUtils";
 import Navigation from "@/components/layout/navigation";
 import Sidebar from "@/components/layout/sidebar";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import type { System, Equipment, Department, ActionParty } from "@shared/schema";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Settings, Plus, Trash2, Users, Database, Cog } from "lucide-react";
+import type { System, Equipment, Department, ActionParty, Rig } from "@shared/schema";
 
-export default function Settings() {
+export default function SettingsPage() {
   const { toast } = useToast();
-  const { isAuthenticated, isLoading, user } = useAuth();
+  const { user, isAuthenticated, isLoading } = useAuth();
   const queryClient = useQueryClient();
-  const [newSystem, setNewSystem] = useState("");
-  const [newDepartment, setNewDepartment] = useState("");
-  const [newActionParty, setNewActionParty] = useState("");
+  const [newItemName, setNewItemName] = useState("");
+  const [newSystemId, setNewSystemId] = useState<number | null>(null);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -35,114 +38,98 @@ export default function Settings() {
     }
   }, [isAuthenticated, isLoading, toast]);
 
-  const { data: systems = [] } = useQuery<System[]>({
-    queryKey: ['/api/systems'],
-    enabled: isAuthenticated,
-  });
+  // Fetch reference data
+  const { data: systems = [] } = useQuery<System[]>({ queryKey: ['/api/systems'] });
+  const { data: equipment = [] } = useQuery<Equipment[]>({ queryKey: ['/api/equipment'] });
+  const { data: departments = [] } = useQuery<Department[]>({ queryKey: ['/api/departments'] });
+  const { data: actionParties = [] } = useQuery<ActionParty[]>({ queryKey: ['/api/action-parties'] });
+  const { data: rigs = [] } = useQuery<Rig[]>({ queryKey: ['/api/rigs'] });
 
-  const { data: departments = [] } = useQuery<Department[]>({
-    queryKey: ['/api/departments'],
-    enabled: isAuthenticated,
-  });
-
-  const { data: actionParties = [] } = useQuery<ActionParty[]>({
-    queryKey: ['/api/action-parties'],
-    enabled: isAuthenticated,
-  });
-
+  // Create mutations for each reference type
   const createSystemMutation = useMutation({
-    mutationFn: async (name: string) => {
-      await apiRequest('POST', '/api/systems', { name });
-    },
+    mutationFn: async (name: string) => apiRequest('/api/systems', {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/systems'] });
-      setNewSystem("");
-      toast({
-        title: "Success",
-        description: "System created successfully",
-      });
+      setNewItemName("");
+      setIsDialogOpen(false);
+      toast({ title: "Success", description: "System created successfully" });
     },
-    onError: (error) => {
-      if (isUnauthorizedError(error)) {
-        toast({
-          title: "Unauthorized",
-          description: "You are logged out. Logging in again...",
-          variant: "destructive",
-        });
-        setTimeout(() => {
-          window.location.href = "/api/login";
-        }, 500);
-        return;
-      }
-      toast({
-        title: "Error",
-        description: "Failed to create system",
-        variant: "destructive",
-      });
+  });
+
+  const createEquipmentMutation = useMutation({
+    mutationFn: async ({ name, systemId }: { name: string; systemId: number }) => 
+      apiRequest('/api/equipment', {
+        method: 'POST',
+        body: JSON.stringify({ name, systemId }),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/equipment'] });
+      setNewItemName("");
+      setNewSystemId(null);
+      setIsDialogOpen(false);
+      toast({ title: "Success", description: "Equipment created successfully" });
     },
   });
 
   const createDepartmentMutation = useMutation({
-    mutationFn: async (name: string) => {
-      await apiRequest('POST', '/api/departments', { name });
-    },
+    mutationFn: async (name: string) => apiRequest('/api/departments', {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/departments'] });
-      setNewDepartment("");
-      toast({
-        title: "Success",
-        description: "Department created successfully",
-      });
-    },
-    onError: (error) => {
-      if (isUnauthorizedError(error)) {
-        toast({
-          title: "Unauthorized",
-          description: "You are logged out. Logging in again...",
-          variant: "destructive",
-        });
-        setTimeout(() => {
-          window.location.href = "/api/login";
-        }, 500);
-        return;
-      }
-      toast({
-        title: "Error",
-        description: "Failed to create department",
-        variant: "destructive",
-      });
+      setNewItemName("");
+      setIsDialogOpen(false);
+      toast({ title: "Success", description: "Department created successfully" });
     },
   });
 
   const createActionPartyMutation = useMutation({
-    mutationFn: async (name: string) => {
-      await apiRequest('POST', '/api/action-parties', { name });
-    },
+    mutationFn: async (name: string) => apiRequest('/api/action-parties', {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/action-parties'] });
-      setNewActionParty("");
-      toast({
-        title: "Success",
-        description: "Action Party created successfully",
-      });
+      setNewItemName("");
+      setIsDialogOpen(false);
+      toast({ title: "Success", description: "Action Party created successfully" });
     },
-    onError: (error) => {
-      if (isUnauthorizedError(error)) {
-        toast({
-          title: "Unauthorized",
-          description: "You are logged out. Logging in again...",
-          variant: "destructive",
-        });
-        setTimeout(() => {
-          window.location.href = "/api/login";
-        }, 500);
-        return;
-      }
-      toast({
-        title: "Error",
-        description: "Failed to create action party",
-        variant: "destructive",
-      });
+  });
+
+  const deleteSystemMutation = useMutation({
+    mutationFn: async (id: number) => apiRequest(`/api/systems/${id}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/systems'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/equipment'] });
+      toast({ title: "Success", description: "System deleted successfully" });
+    },
+  });
+
+  const deleteEquipmentMutation = useMutation({
+    mutationFn: async (id: number) => apiRequest(`/api/equipment/${id}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/equipment'] });
+      toast({ title: "Success", description: "Equipment deleted successfully" });
+    },
+  });
+
+  const deleteDepartmentMutation = useMutation({
+    mutationFn: async (id: number) => apiRequest(`/api/departments/${id}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/departments'] });
+      toast({ title: "Success", description: "Department deleted successfully" });
+    },
+  });
+
+  const deleteActionPartyMutation = useMutation({
+    mutationFn: async (id: number) => apiRequest(`/api/action-parties/${id}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/action-parties'] });
+      toast({ title: "Success", description: "Action Party deleted successfully" });
     },
   });
 
@@ -150,7 +137,88 @@ export default function Settings() {
     return <div className="min-h-screen bg-gray-50 flex items-center justify-center">Loading...</div>;
   }
 
-  const isAdmin = user?.role === 'admin';
+  if (user?.role !== 'admin') {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Navigation />
+        <div className="flex">
+          <Sidebar />
+          <div className="flex-1 p-6">
+            <Card>
+              <CardContent className="p-8 text-center">
+                <h2 className="text-xl font-semibold mb-2">Access Denied</h2>
+                <p className="text-gray-600">Only administrators can access system settings.</p>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const CreateItemDialog = ({ type, title, onSubmit, loading }: {
+    type: string;
+    title: string;
+    onSubmit: () => void;
+    loading: boolean;
+  }) => (
+    <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+      <DialogTrigger asChild>
+        <Button size="sm" data-testid={`button-add-${type}`}>
+          <Plus className="h-4 w-4 mr-1" />
+          Add {title}
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Add New {title}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div>
+            <Label htmlFor="name">Name</Label>
+            <Input
+              id="name"
+              value={newItemName}
+              onChange={(e) => setNewItemName(e.target.value)}
+              placeholder={`Enter ${title.toLowerCase()} name`}
+              data-testid={`input-${type}-name`}
+            />
+          </div>
+          {type === 'equipment' && (
+            <div>
+              <Label htmlFor="system">System</Label>
+              <select
+                id="system"
+                value={newSystemId || ''}
+                onChange={(e) => setNewSystemId(Number(e.target.value))}
+                className="w-full p-2 border rounded"
+                data-testid="select-equipment-system"
+              >
+                <option value="">Select System</option>
+                {systems.map((system) => (
+                  <option key={system.id} value={system.id}>
+                    {system.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={onSubmit}
+              disabled={loading || !newItemName.trim() || (type === 'equipment' && !newSystemId)}
+              data-testid={`button-create-${type}`}
+            >
+              {loading ? "Creating..." : "Create"}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -159,153 +227,272 @@ export default function Settings() {
         <Sidebar />
         <div className="flex-1 p-6">
           <div className="space-y-6">
-            <div className="flex justify-between items-center">
-              <h2 className="text-2xl font-bold text-gray-900" data-testid="text-settings-title">System Settings</h2>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Settings className="h-6 w-6" />
+                <h1 className="text-3xl font-bold">System Settings</h1>
+                <Badge variant="secondary">Admin Only</Badge>
+              </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Reference Data Management */}
-              <div className="lg:col-span-2 space-y-6">
+            <Tabs defaultValue="systems" className="space-y-4">
+              <TabsList className="grid w-full grid-cols-5">
+                <TabsTrigger value="systems" className="flex items-center gap-2">
+                  <Database className="h-4 w-4" />
+                  Systems
+                </TabsTrigger>
+                <TabsTrigger value="equipment" className="flex items-center gap-2">
+                  <Cog className="h-4 w-4" />
+                  Equipment
+                </TabsTrigger>
+                <TabsTrigger value="departments" className="flex items-center gap-2">
+                  <Users className="h-4 w-4" />
+                  Departments
+                </TabsTrigger>
+                <TabsTrigger value="action-parties">Action Parties</TabsTrigger>
+                <TabsTrigger value="rigs">Rigs</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="systems">
                 <Card>
-                  <CardHeader>
-                    <CardTitle>Reference Data Management</CardTitle>
+                  <CardHeader className="flex flex-row items-center justify-between">
+                    <CardTitle>Systems Management</CardTitle>
+                    <CreateItemDialog
+                      type="system"
+                      title="System"
+                      onSubmit={() => createSystemMutation.mutate(newItemName)}
+                      loading={createSystemMutation.isPending}
+                    />
                   </CardHeader>
-                  <CardContent className="space-y-6">
-                    {/* Systems */}
-                    <div>
-                      <Label className="text-sm font-medium text-gray-700 mb-2 block">Systems</Label>
-                      {isAdmin && (
-                        <div className="flex space-x-2 mb-3">
-                          <Input
-                            placeholder="Add new system"
-                            value={newSystem}
-                            onChange={(e) => setNewSystem(e.target.value)}
-                            onKeyPress={(e) => e.key === 'Enter' && newSystem.trim() && createSystemMutation.mutate(newSystem.trim())}
-                            data-testid="input-new-system"
-                          />
-                          <Button
-                            onClick={() => newSystem.trim() && createSystemMutation.mutate(newSystem.trim())}
-                            disabled={!newSystem.trim() || createSystemMutation.isPending}
-                            data-testid="button-add-system"
-                          >
-                            Add
-                          </Button>
-                        </div>
-                      )}
-                      <div className="flex flex-wrap gap-2">
+                  <CardContent>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Name</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Equipment Count</TableHead>
+                          <TableHead>Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
                         {systems.map((system) => (
-                          <Badge key={system.id} variant="secondary" data-testid={`badge-system-${system.id}`}>
-                            {system.name}
-                          </Badge>
+                          <TableRow key={system.id}>
+                            <TableCell className="font-medium">{system.name}</TableCell>
+                            <TableCell>
+                              <Badge variant={system.isActive ? "default" : "secondary"}>
+                                {system.isActive ? "Active" : "Inactive"}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              {equipment.filter(eq => eq.systemId === system.id).length}
+                            </TableCell>
+                            <TableCell>
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => deleteSystemMutation.mutate(system.id)}
+                                disabled={deleteSystemMutation.isPending}
+                                data-testid={`button-delete-system-${system.id}`}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
                         ))}
-                      </div>
-                    </div>
-
-                    {/* Departments */}
-                    <div>
-                      <Label className="text-sm font-medium text-gray-700 mb-2 block">Departments</Label>
-                      {isAdmin && (
-                        <div className="flex space-x-2 mb-3">
-                          <Input
-                            placeholder="Add new department"
-                            value={newDepartment}
-                            onChange={(e) => setNewDepartment(e.target.value)}
-                            onKeyPress={(e) => e.key === 'Enter' && newDepartment.trim() && createDepartmentMutation.mutate(newDepartment.trim())}
-                            data-testid="input-new-department"
-                          />
-                          <Button
-                            onClick={() => newDepartment.trim() && createDepartmentMutation.mutate(newDepartment.trim())}
-                            disabled={!newDepartment.trim() || createDepartmentMutation.isPending}
-                            data-testid="button-add-department"
-                          >
-                            Add
-                          </Button>
-                        </div>
-                      )}
-                      <div className="flex flex-wrap gap-2">
-                        {departments.map((department) => (
-                          <Badge key={department.id} variant="secondary" data-testid={`badge-department-${department.id}`}>
-                            {department.name}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Action Parties */}
-                    <div>
-                      <Label className="text-sm font-medium text-gray-700 mb-2 block">Action Parties</Label>
-                      {isAdmin && (
-                        <div className="flex space-x-2 mb-3">
-                          <Input
-                            placeholder="Add new action party"
-                            value={newActionParty}
-                            onChange={(e) => setNewActionParty(e.target.value)}
-                            onKeyPress={(e) => e.key === 'Enter' && newActionParty.trim() && createActionPartyMutation.mutate(newActionParty.trim())}
-                            data-testid="input-new-action-party"
-                          />
-                          <Button
-                            onClick={() => newActionParty.trim() && createActionPartyMutation.mutate(newActionParty.trim())}
-                            disabled={!newActionParty.trim() || createActionPartyMutation.isPending}
-                            data-testid="button-add-action-party"
-                          >
-                            Add
-                          </Button>
-                        </div>
-                      )}
-                      <div className="flex flex-wrap gap-2">
-                        {actionParties.map((actionParty) => (
-                          <Badge key={actionParty.id} variant="secondary" data-testid={`badge-action-party-${actionParty.id}`}>
-                            {actionParty.name}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
+                      </TableBody>
+                    </Table>
                   </CardContent>
                 </Card>
-              </div>
+              </TabsContent>
 
-              {/* System Status */}
-              <div className="space-y-6">
+              <TabsContent value="equipment">
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between">
+                    <CardTitle>Equipment Management</CardTitle>
+                    <CreateItemDialog
+                      type="equipment"
+                      title="Equipment"
+                      onSubmit={() => createEquipmentMutation.mutate({ 
+                        name: newItemName, 
+                        systemId: newSystemId! 
+                      })}
+                      loading={createEquipmentMutation.isPending}
+                    />
+                  </CardHeader>
+                  <CardContent>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Name</TableHead>
+                          <TableHead>System</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {equipment.map((eq) => {
+                          const system = systems.find(s => s.id === eq.systemId);
+                          return (
+                            <TableRow key={eq.id}>
+                              <TableCell className="font-medium">{eq.name}</TableCell>
+                              <TableCell>{system?.name || 'Unknown'}</TableCell>
+                              <TableCell>
+                                <Badge variant={eq.isActive ? "default" : "secondary"}>
+                                  {eq.isActive ? "Active" : "Inactive"}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  onClick={() => deleteEquipmentMutation.mutate(eq.id)}
+                                  disabled={deleteEquipmentMutation.isPending}
+                                  data-testid={`button-delete-equipment-${eq.id}`}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="departments">
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between">
+                    <CardTitle>Departments Management</CardTitle>
+                    <CreateItemDialog
+                      type="department"
+                      title="Department"
+                      onSubmit={() => createDepartmentMutation.mutate(newItemName)}
+                      loading={createDepartmentMutation.isPending}
+                    />
+                  </CardHeader>
+                  <CardContent>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Name</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {departments.map((dept) => (
+                          <TableRow key={dept.id}>
+                            <TableCell className="font-medium">{dept.name}</TableCell>
+                            <TableCell>
+                              <Badge variant={dept.isActive ? "default" : "secondary"}>
+                                {dept.isActive ? "Active" : "Inactive"}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => deleteDepartmentMutation.mutate(dept.id)}
+                                disabled={deleteDepartmentMutation.isPending}
+                                data-testid={`button-delete-department-${dept.id}`}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="action-parties">
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between">
+                    <CardTitle>Action Parties Management</CardTitle>
+                    <CreateItemDialog
+                      type="action-party"
+                      title="Action Party"
+                      onSubmit={() => createActionPartyMutation.mutate(newItemName)}
+                      loading={createActionPartyMutation.isPending}
+                    />
+                  </CardHeader>
+                  <CardContent>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Name</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {actionParties.map((party) => (
+                          <TableRow key={party.id}>
+                            <TableCell className="font-medium">{party.name}</TableCell>
+                            <TableCell>
+                              <Badge variant={party.isActive ? "default" : "secondary"}>
+                                {party.isActive ? "Active" : "Inactive"}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => deleteActionPartyMutation.mutate(party.id)}
+                                disabled={deleteActionPartyMutation.isPending}
+                                data-testid={`button-delete-action-party-${party.id}`}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="rigs">
                 <Card>
                   <CardHeader>
-                    <CardTitle>System Status</CardTitle>
+                    <CardTitle>Rigs Information</CardTitle>
                   </CardHeader>
-                  <CardContent className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600">Database</span>
-                      <span className="flex items-center text-green-600">
-                        <i className="fas fa-check-circle mr-1"></i>
-                        Online
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600">Authentication</span>
-                      <span className="flex items-center text-green-600">
-                        <i className="fas fa-check-circle mr-1"></i>
-                        Active
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600">User Role</span>
-                      <Badge variant={isAdmin ? "default" : "secondary"}>
-                        {user?.role || 'Unknown'}
-                      </Badge>
-                    </div>
+                  <CardContent>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Rig Number</TableHead>
+                          <TableHead>Section</TableHead>
+                          <TableHead>Client</TableHead>
+                          <TableHead>Location</TableHead>
+                          <TableHead>Status</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {rigs.map((rig) => (
+                          <TableRow key={rig.id}>
+                            <TableCell className="font-medium">{rig.rigNumber}</TableCell>
+                            <TableCell className="capitalize">{rig.section}</TableCell>
+                            <TableCell>{rig.client}</TableCell>
+                            <TableCell>{rig.location}</TableCell>
+                            <TableCell>
+                              <Badge variant={rig.isActive ? "default" : "secondary"}>
+                                {rig.isActive ? "Active" : "Inactive"}
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
                   </CardContent>
                 </Card>
-
-                {!isAdmin && (
-                  <Card>
-                    <CardContent className="pt-6">
-                      <div className="text-center">
-                        <i className="fas fa-info-circle text-blue-500 text-2xl mb-2"></i>
-                        <p className="text-sm text-gray-600">Admin access required to modify system settings.</p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-              </div>
-            </div>
+              </TabsContent>
+            </Tabs>
           </div>
         </div>
       </div>

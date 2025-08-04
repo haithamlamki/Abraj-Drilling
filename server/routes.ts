@@ -2,8 +2,17 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
+import { BillingProcessor } from "./billingProcessor";
 import { insertNptReportSchema, insertSystemSchema, insertEquipmentSchema, insertDepartmentSchema, insertActionPartySchema } from "@shared/schema";
+import type { BillingSheetRow } from "@shared/billingTypes";
 import { z } from "zod";
+import multer from "multer";
+
+// Configure multer for file uploads
+const upload = multer({ 
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+});
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
@@ -343,6 +352,293 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       console.error("Error creating action party:", error);
       res.status(500).json({ message: "Failed to create action party" });
+    }
+  });
+
+  // Billing upload routes
+  app.post('/api/billing-upload', isAuthenticated, upload.single('file'), async (req: any, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: "No file uploaded" });
+      }
+
+      const userId = req.user.claims.sub;
+      const fileName = req.file.originalname;
+      const fileContent = req.file.buffer.toString('utf-8');
+
+      const billingProcessor = new BillingProcessor();
+      const result = await billingProcessor.processBillingSheet(fileName, fileContent);
+
+      // Store upload record
+      await storage.saveBillingUpload({
+        fileName,
+        uploadedBy: userId,
+        status: result.errors.length === 0 ? 'Completed' : 'Failed',
+        result
+      });
+
+      res.json(result);
+    } catch (error) {
+      console.error("Error processing billing upload:", error);
+      res.status(500).json({ message: "Error processing file upload" });
+    }
+  });
+
+  app.get('/api/billing-uploads', isAuthenticated, async (req: any, res) => {
+    try {
+      const uploads = await storage.getBillingUploads();
+      res.json(uploads);
+    } catch (error) {
+      console.error("Error fetching billing uploads:", error);
+      res.status(500).json({ message: "Failed to fetch upload history" });
+    }
+  });
+
+  app.post('/api/billing-convert', isAuthenticated, async (req: any, res) => {
+    try {
+      const { rows }: { rows: BillingSheetRow[] } = req.body;
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+
+      if (!user) {
+        return res.status(401).json({ message: "User not found" });
+      }
+
+      const createdReports = [];
+
+      for (const row of rows) {
+        // Find rig by number
+        const rig = await storage.getRigByNumber(parseInt(row.rigNumber));
+        if (!rig) {
+          console.warn(`Rig ${row.rigNumber} not found, skipping row`);
+          continue;
+        }
+
+        // Find system by name (for Abroad types)
+        let systemName = null;
+        if (row.nbtType === 'Abroad' && row.extractedEquipment) {
+          const system = await storage.getSystemByName(row.extractedEquipment);
+          systemName = system?.name || null;
+        }
+
+        // Create NPT report data
+        const reportData = {
+          rigId: rig.id,
+          date: row.date,
+          year: row.year,
+          month: row.month,
+          hours: row.hours,
+          nptType: row.nbtType,
+          system: systemName,
+          partEquipment: row.extractedFailure || null,
+          contractualProcess: row.nbtType === 'Contractual' ? row.description : null,
+          immediateCause: row.nbtType === 'Abroad' ? row.extractedFailure : null,
+          wellName: null,
+          userId: user.id,
+          status: 'Draft' as const,
+        };
+
+        const newReport = await storage.createNptReport(reportData);
+        createdReports.push(newReport);
+      }
+
+      res.json({ 
+        message: `Successfully created ${createdReports.length} NPT reports`,
+        createdReports 
+      });
+    } catch (error) {
+      console.error("Error converting billing data:", error);
+      res.status(500).json({ message: "Error creating NPT reports from billing data" });
+    }
+  });
+
+  // Reports export endpoint
+  app.get('/api/reports/export', isAuthenticated, async (req: any, res) => {
+    try {
+      const { rig, month, year, status } = req.query;
+      
+      let allReports = await storage.getNptReports();
+      
+      // Apply filters
+      const filteredReports = allReports.filter(report => {
+        if (rig !== 'all' && report.rigId !== parseInt(rig)) return false;
+        if (month !== 'all' && report.month !== month) return false;
+        if (year !== 'all' && report.year !== parseInt(year)) return false;
+        if (status !== 'all' && report.status !== status) return false;
+        return true;
+      });
+
+      // Convert to CSV
+      const headers = [
+        'Date', 'Rig Number', 'Year', 'Month', 'Hours', 'NPT Type', 'System',
+        'Part Equipment', 'Contractual Process', 'Immediate Cause', 'Root Cause',
+        'Corrective Action', 'Future Action', 'Department', 'Action Party',
+        'Well Name', 'Notification Number', 'Status', 'Created At'
+      ];
+
+      const csvRows = [headers.join(',')];
+      
+      for (const report of filteredReports) {
+        const rig = await storage.getRig(report.rigId);
+        const row = [
+          new Date(report.date).toLocaleDateString(),
+          rig?.rigNumber || '',
+          report.year,
+          report.month,
+          report.hours,
+          report.nptType,
+          report.system || '',
+          report.partEquipment || '',
+          report.contractualProcess || '',
+          report.immediateCause || '',
+          report.rootCause || '',
+          report.correctiveAction || '',
+          report.futureAction || '',
+          report.department || '',
+          report.actionParty || '',
+          report.wellName || '',
+          report.notificationNumber || '',
+          report.status || 'draft',
+          report.createdAt ? new Date(report.createdAt).toLocaleDateString() : ''
+        ];
+        csvRows.push(row.map(field => `"${field}"`).join(','));
+      }
+
+      const csvContent = csvRows.join('\n');
+      
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', 'attachment; filename="npt-reports.csv"');
+      res.send(csvContent);
+    } catch (error) {
+      console.error("Error exporting reports:", error);
+      res.status(500).json({ message: "Failed to export reports" });
+    }
+  });
+
+  // Reports dashboard stats endpoint
+  app.get('/api/dashboard/reports-stats', isAuthenticated, async (req: any, res) => {
+    try {
+      const reports = await storage.getNptReports();
+      
+      const stats = {
+        totalReports: reports.length,
+        pendingReports: reports.filter(r => r.status === 'pending').length,
+        approvedReports: reports.filter(r => r.status === 'approved').length,
+        totalHours: reports.reduce((sum, r) => sum + parseFloat(r.hours), 0),
+        avgHoursPerReport: reports.length > 0 ? 
+          reports.reduce((sum, r) => sum + parseFloat(r.hours), 0) / reports.length : 0,
+        nptTypeDistribution: reports.reduce((acc, r) => {
+          const hours = parseFloat(r.hours);
+          const existing = acc.find(item => item.type === r.nptType);
+          if (existing) {
+            existing.hours += hours;
+            existing.count += 1;
+          } else {
+            acc.push({ type: r.nptType, hours, count: 1 });
+          }
+          return acc;
+        }, [] as Array<{ type: string; hours: number; count: number }>),
+        monthlyTrends: reports.reduce((acc, r) => {
+          const key = `${r.year}-${r.month}`;
+          const hours = parseFloat(r.hours);
+          const existing = acc.find(item => item.month === key);
+          if (existing) {
+            existing.hours += hours;
+            existing.count += 1;
+          } else {
+            acc.push({ month: key, hours, count: 1 });
+          }
+          return acc;
+        }, [] as Array<{ month: string; hours: number; count: number }>)
+      };
+
+      res.json(stats);
+    } catch (error) {
+      console.error("Error fetching dashboard stats:", error);
+      res.status(500).json({ message: "Failed to fetch dashboard stats" });
+    }
+  });
+
+  // Approval workflow endpoints
+  app.post('/api/npt-reports/:id/approve', isAuthenticated, async (req: any, res) => {
+    try {
+      const reportId = parseInt(req.params.id);
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+
+      if (user?.role !== 'admin' && user?.role !== 'supervisor') {
+        return res.status(403).json({ message: "Only administrators and supervisors can approve reports" });
+      }
+
+      await storage.updateNptReport(reportId, {
+        status: 'approved',
+        approvedBy: userId,
+        approvedAt: new Date()
+      });
+
+      res.json({ message: "Report approved successfully" });
+    } catch (error) {
+      console.error("Error approving report:", error);
+      res.status(500).json({ message: "Failed to approve report" });
+    }
+  });
+
+  app.post('/api/npt-reports/:id/reject', isAuthenticated, async (req: any, res) => {
+    try {
+      const reportId = parseInt(req.params.id);
+      const { reason } = req.body;
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+
+      if (user?.role !== 'admin' && user?.role !== 'supervisor') {
+        return res.status(403).json({ message: "Only administrators and supervisors can reject reports" });
+      }
+
+      if (!reason?.trim()) {
+        return res.status(400).json({ message: "Rejection reason is required" });
+      }
+
+      await storage.updateNptReport(reportId, {
+        status: 'rejected',
+        rejectionReason: reason,
+        rejectedBy: userId,
+        rejectedAt: new Date()
+      });
+
+      res.json({ message: "Report rejected successfully" });
+    } catch (error) {
+      console.error("Error rejecting report:", error);
+      res.status(500).json({ message: "Failed to reject report" });
+    }
+  });
+
+  app.post('/api/npt-reports/:id/submit', isAuthenticated, async (req: any, res) => {
+    try {
+      const reportId = parseInt(req.params.id);
+      const userId = req.user.claims.sub;
+      
+      const report = await storage.getNptReport(reportId);
+      if (!report) {
+        return res.status(404).json({ message: "Report not found" });
+      }
+
+      if (report.userId !== userId) {
+        return res.status(403).json({ message: "You can only submit your own reports" });
+      }
+
+      if (report.status !== 'draft') {
+        return res.status(400).json({ message: "Only draft reports can be submitted for approval" });
+      }
+
+      await storage.updateNptReport(reportId, {
+        status: 'pending',
+        submittedAt: new Date()
+      });
+
+      res.json({ message: "Report submitted for approval successfully" });
+    } catch (error) {
+      console.error("Error submitting report for approval:", error);
+      res.status(500).json({ message: "Failed to submit report for approval" });
     }
   });
 

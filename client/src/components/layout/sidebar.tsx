@@ -30,6 +30,11 @@ export default function Sidebar() {
       label: "Billing Upload",
     },
     {
+      href: "/reports",
+      icon: "fas fa-chart-bar",
+      label: "Reports Dashboard",
+    },
+    {
       href: "/approvals",
       icon: "fas fa-check-circle",
       label: "Approvals",
