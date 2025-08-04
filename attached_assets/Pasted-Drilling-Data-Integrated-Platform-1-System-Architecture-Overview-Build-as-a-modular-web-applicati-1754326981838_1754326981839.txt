@@ -1,0 +1,201 @@
+Drilling Data Integrated Platform
+1. System Architecture (Overview)
+Build as a modular web application (suggested: FastAPI + React, or Django + React, or Node.js + React).
+
+Separate data tables per report type (NPT, DDOR, Billing, etc.), but all linked by master reference tables (Rigs, Hoists, Clients, Rates…).
+
+Every report section is self-contained with its own entry logic and quality rules but is interconnected at the database layer for system-wide analytics and cross-reporting.
+
+2. Database Commands (SQL Models)
+Create Reference Tables:
+sql
+Copy
+Edit
+CREATE TABLE rigs (
+    id SERIAL PRIMARY KEY,
+    rig_number INT UNIQUE NOT NULL,
+    section VARCHAR(20) NOT NULL, -- drilling/hoist
+    client VARCHAR(100),
+    budget DECIMAL,
+    location VARCHAR(100),
+    rates JSONB -- Store rate types and values
+    -- ...more columns as per 'Rigs Information.xlsx'
+);
+
+CREATE TABLE users (
+    id SERIAL PRIMARY KEY,
+    email VARCHAR(100) UNIQUE NOT NULL,
+    name VARCHAR(100),
+    rig_id INT REFERENCES rigs(id),
+    role VARCHAR(30) -- admin, supervisor, drilling_manager, etc.
+);
+Create Main Report Table (Example: NPT Reports)
+sql
+Copy
+Edit
+CREATE TABLE npt_reports (
+    id SERIAL PRIMARY KEY,
+    rig_id INT REFERENCES rigs(id),
+    user_id INT REFERENCES users(id),
+    date DATE NOT NULL,
+    year INT GENERATED ALWAYS AS (EXTRACT(YEAR FROM date)) STORED,
+    month VARCHAR(3) GENERATED ALWAYS AS (TO_CHAR(date, 'Mon')) STORED,
+    hours DECIMAL NOT NULL CHECK (hours > 0),
+    npt_type VARCHAR(20) NOT NULL, -- Contractual or Abraj
+    system VARCHAR(50),
+    parent_equipment VARCHAR(100),
+    part_equipment VARCHAR(100),
+    contractual_process TEXT,
+    department VARCHAR(50),
+    immediate_cause TEXT,
+    root_cause TEXT,
+    corrective_action TEXT,
+    future_action TEXT,
+    action_party VARCHAR(50),
+    notification_number VARCHAR(20),
+    investigation_report VARCHAR(200),
+    well_name VARCHAR(50),
+    status VARCHAR(20) DEFAULT 'Draft', -- Draft, Pending Review, Approved, Rejected
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+3. Data Entry Logic & Validation Rules (Backend/API/Business Logic)
+Autofill Logic:
+
+Auto-calculate year and month from the date field.
+
+If npt_type = 'Contractual': only enable the contractual_process field; disable technical fields (equipment/failure/cause).
+
+If npt_type = 'Abraj': only enable technical fields; disable contractual_process.
+
+Validation:
+
+No record allowed with hours ≤ 0 or > 24 for a single day (if more: split into new rows for the next day, with incident linking).
+
+For Drilling/Project: If hours between 3.75 and 5.75, notification_number is required.
+
+For Maintenance: If hours between 2 and 5.75, notification_number is required.
+
+For any department: If hours ≥ 6, investigation_report is required (file upload or AI-generated).
+
+Spellcheck free-text fields via OpenAI API or Microsoft Speller.
+
+Notifications:
+
+When submitting as "Pending Review", notify the responsible supervisor.
+
+On rejection, notify the submitter with the rejection reason.
+
+Flag and highlight any record with missing/low-quality data for data analyst and user.
+
+Access Control:
+
+Only admin/supervisor can edit, delete, or approve records.
+
+All CRUD operations are timestamped and user-stamped (audit log).
+
+4. AI and Data Quality Integration
+OpenAI Integration:
+
+Spellcheck, root cause suggestion, and NLP-driven field prefill for free text.
+
+Smart data quality analysis (detect missing data, anomalies, potential duplicates).
+
+Cross-report validation (e.g., compare NPT hours vs. Billing/DDOR).
+
+Automated Billing Sheet Parsing:
+
+On upload (PDF/Excel), the system:
+
+Extracts all rows.
+
+Detects rig number, date, rate type, hours, and description.
+
+Classifies NPT type (Abroad if repair/reduced/zero rate, Contractual otherwise)
+.
+
+Auto-suggests equipment/failure fields.
+
+Links parsed data to NPT records and flags inconsistencies.
+
+Data Quality Dashboard:
+
+API endpoint (and dashboard page) showing:
+
+Number of incomplete records.
+
+Approval/rejection rates.
+
+Data synchronization health between NPT, Billing, DDOR.
+
+5. Frontend & User Interface (UI/UX) Logic
+Dynamic form: fields shown/enabled based on user role and npt_type.
+
+Support both manual data entry and file upload for bulk creation.
+
+Dropdown lists dynamically populated from database (for equipment, system, party, etc).
+
+Highlight incomplete/low-quality entries with warning badges.
+
+Reviewer page with Approve/Reject actions and comment box.
+
+6. Extend to Other Reports (DDOR, Rig Move, Billing, etc)
+Use the same structure: dedicated table, linked to rigs and users, with its own validation and workflow rules.
+
+Cross-link data for analytics (e.g., link NPT/Billing by date, rig, and event).
+
+Build dashboard views per rig/hoist/client and time window (day, month, year).
+
+7. Import/Export & Backup
+API endpoints to export/import data as Excel.
+
+Automated daily backup with admin-accessible restore command.
+
+Log every import/export/restore operation for audit.
+
+8. Code/Script Examples for Replit (Python/JS)
+Project Initialization Example:
+bash
+Copy
+Edit
+# Frontend
+npx create-react-app drilling-data-platform
+cd drilling-data-platform
+
+# Backend (example: FastAPI)
+python -m venv venv
+source venv/bin/activate
+pip install fastapi uvicorn sqlalchemy psycopg2
+Sample Validation Function (Python):
+python
+Copy
+Edit
+def validate_npt_entry(entry):
+    assert entry['hours'] > 0 and entry['hours'] <= 24
+    if entry['npt_type'] == 'Contractual':
+        assert entry['contractual_process'], "Contractual Process required"
+    else:
+        assert entry['parent_equipment'], "Parent equipment required"
+        assert entry['department'], "Department required"
+    # Add further rules as needed
+9. Practical Build Steps for Replit
+Upload Reference Files (drop-downs, rigs info, samples, etc).
+
+Implement backend API endpoints for report CRUD, validation, AI integration, and file uploads.
+
+Build user interface:
+
+Unified entry form per report, role-based controls.
+
+Table views for review, data quality, approval.
+
+Data analytics dashboards.
+
+Connect to OpenAI (Python openai library or webhook) for AI tasks (spellcheck, suggestions).
+
+10. Continuous Improvement & Review
+Regularly review requirements with users and stakeholders.
+
+Use Agile/iterative updates for logic, UI, and validation rules.
+
+Add visual analytics and cross-report dashboards for management review.

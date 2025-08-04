@@ -1,0 +1,418 @@
+Detailed Technical Requirements for NPT Application
+Introduction
+This document provides a comprehensive analysis and requirements specification for developing an interactive NPT (Non-Productive Time) application, designed to replace the existing Excel model with a workflow-driven web application. Requirements are derived from:
+
+Original user requirements.
+
+Current Excel file analysis.
+
+Attached screenshot(s) of the required model.
+
+Source Excel Analysis
+The Excel file contains a single worksheet: “Data”
+
+Number of columns: 19
+
+Current Column Names
+Rig Number
+
+Year
+
+Month
+
+Date
+
+Hours
+
+NPT type
+
+System
+
+Equipment
+
+The Part
+
+Contractual
+
+Department Responsibility
+
+The Failure description
+
+Root Cause
+
+Corrective Action
+
+Future Action
+
+Action Party
+
+Notification Number (N2)
+
+Failure investigation report
+
+Well Name
+
+Mapping: Current vs. Required Field Names
+Excel Field	New App Field	Notes
+Rig Number	Rig Number	No change
+Year	Year	No change, auto-derived from date
+Month	Month	No change, auto-derived from date
+Date	Date	No change
+Hours	Hrs.	Minor name update
+NPT type	NPT type	No change
+System	SYSTEM	Capitalization updated
+Equipment	Parent Equipment Failure	Renamed
+The Part	Part Equipment Failure	Renamed
+Contractual	Contractual Process	Renamed
+Department Responsibility	Department Responsibility	No change
+The Failure description	Immediate Cause of Failure	Renamed
+Root Cause	Root Cause	No change
+Corrective Action	Immediate Corrective Action	Renamed
+Future Action	Future Action & Improvement	Minor name update
+Action Party	Action Party	No change
+Notification Number (N2)	Notification Number (N2)	No change
+Failure investigation report	Failure investigation report	No change
+Well Name	Well Name	No change
+
+Field-by-Field Requirements
+1. Rig Number
+Description: Rig Unit Number
+
+Data Type: Integer
+
+Source: Bound to the logged-in user's assigned rig number
+
+Permitted Values: [103, 104, 105, ..., 306] (list all rig numbers as specified)
+
+Logic:
+
+This field is populated automatically based on the logged-in user and cannot be edited by the user.
+
+2. Year
+Description: Year of the event
+
+Data Type: Integer
+
+Source: Derived automatically from Date
+
+Logic:
+
+Auto-filled and updated whenever Date changes
+
+Not user-editable
+
+3. Month
+Description: Month of the event
+
+Data Type: String (Short month name, e.g. Jan, Feb)
+
+Source: Derived automatically from Date
+
+Logic:
+
+Auto-filled and updated whenever Date changes
+
+Not user-editable
+
+4. Date
+Description: Date of event
+
+Data Type: Date
+
+Source: User entry
+
+Logic:
+
+Required field
+
+Valid date only
+
+Auto-updates Year and Month fields
+
+5. Hrs.
+Description: NPT hours for this entry
+
+Data Type: Decimal
+
+Source: User entry
+
+Logic:
+
+Required
+
+Must be positive numeric value
+
+6. NPT type
+Description: Type of NPT
+
+Data Type: Dropdown (String)
+
+Options: Contractual, Abraj
+
+Logic:
+
+Required
+
+Controls visibility/editability of related fields:
+
+If “Contractual”: Only “Contractual Process” is editable; all equipment/failure/cause fields are disabled.
+
+If “Abraj”: All equipment/failure/cause fields are editable; “Contractual Process” is disabled.
+
+7. SYSTEM
+Description: Affected system
+
+Data Type: Dropdown (String)
+
+Options: As per existing data (expandable)
+
+Logic:
+
+Required
+
+Filters available Parent Equipment Failure options
+
+8. Parent Equipment Failure
+Description: Main equipment failed
+
+Data Type: Dropdown (String)
+
+Options: Filtered by SYSTEM
+
+Logic:
+
+Required if NPT type = Abraj, disabled otherwise
+
+Admin can add new categories
+
+9. Part Equipment Failure
+Description: Failed sub-component
+
+Data Type: String
+
+Source: User entry
+
+Logic:
+
+Required if NPT type = Abraj, disabled otherwise
+
+10. Contractual Process
+Description: Contractual process description
+
+Data Type: String
+
+Source: User entry
+
+Logic:
+
+Required if NPT type = Contractual, disabled otherwise
+
+11. Department Responsibility
+Description: Department responsible for the NPT
+
+Data Type: Dropdown (String)
+
+Options: Drilling, M.Maintenance, E.Maintenance, Project (deduplicate as needed)
+
+Logic:
+
+Required if NPT type = Abraj, disabled otherwise
+
+12. Immediate Cause of Failure
+Description: Immediate failure cause
+
+Data Type: String
+
+Source: User entry
+
+Logic:
+
+Required if NPT type = Abraj, disabled otherwise
+
+Spellcheck as possible (custom glossary or API)
+
+13. Root Cause
+Description: Root cause of failure
+
+Data Type: String
+
+Source: User entry
+
+Logic:
+
+Required if NPT type = Abraj, disabled otherwise
+
+Spellcheck as possible
+
+14. Immediate Corrective Action
+Description: Immediate corrective action taken
+
+Data Type: String
+
+Source: User entry
+
+Logic:
+
+Required if NPT type = Abraj, disabled otherwise
+
+15. Future Action & Improvement
+Description: Future action or improvement plan
+
+Data Type: String
+
+Source: User entry
+
+Logic:
+
+Required if NPT type = Abraj, disabled otherwise
+
+16. Action Party
+Description: Responsible party for action
+
+Data Type: Dropdown (String)
+
+Options: E.Maintenance, M.Maintenance, Drilling, CE, C.E, TP, CM, ELE, MECHANIC, Logging, DS, etc. (deduplicate as needed)
+
+Logic:
+
+Required if NPT type = Abraj, disabled otherwise
+
+17. Notification Number (N2)
+Data Type: String/Integer (manual user entry)
+
+Required only if:
+
+For Drilling & Project: If Hrs is between 3.75 and 5.75 (inclusive)
+
+For Maintenance (M/E): If Hrs is between 2.0 and 5.75 (inclusive)
+
+18. Failure Investigation Report
+Data Type: File upload or AI-generated report
+
+Required only if: Hrs >= 6.0 (any department)
+
+19. Well Name
+Description: Well Name
+
+Data Type: String or Dropdown
+
+Source: User entry or selection from rig move reports
+
+General Validation & Business Rules
+All mandatory fields must be validated before record creation or update.
+
+Date validation: Accept only valid dates.
+
+Hrs validation: Must be a positive number.
+
+Spellcheck: Apply to free-text cause/action fields (leverage Microsoft Spelling API or custom dictionary if feasible).
+
+Dropdown values: Normalize duplicates in lists (e.g., "CE" vs "C.E").
+
+Field dependencies: Enforce enable/disable logic as above.
+
+Workflow Rules
+Create New Record
+
+Auto-fill fields based on user and current context.
+
+Save to NPT_Records table.
+
+Update Existing Record
+
+Only authorized users (owner or admin) may update.
+
+Delete Record
+
+Only admins may delete.
+
+Submit for Review
+
+Status changes to “Pending Review”, notification sent to supervisor.
+
+Approve/Reject Record
+
+Only supervisors can approve/reject.
+
+Rejected records notify creator and must include rejection reason.
+
+Role-based Access
+
+Drilling Manager enters data.
+
+If non-Operations department: Route to relevant department for edit/approval.
+
+If department changed, route to new department.
+
+Supervisor (Manager) final approval required.
+
+Daily Entry Cap
+
+Maximum 24 hours per day; if more, new row for next day.
+
+Option to link multi-day events as one incident.
+
+Historical Events
+
+Admins can bulk upload past events.
+
+Data Entry Methods
+
+Manual entry or PDF upload and extraction.
+
+PDF templates provided; app should parse using AI/OCR and map to fields.
+
+QC Against Invoice
+
+Upload client invoice; app compares total hours and generates compliance report.
+
+Invoice Attachment
+
+Link final invoice to the relevant row.
+
+Visual Reporting
+
+Dashboard per rig, by day and month, for completed/verified reports.
+
+Admin/Dropdown Management
+Admins can add/edit:
+
+Systems, Parent Equipment, Departments, Action Parties, etc.
+
+Normalization enforced for similar values.
+
+Security & Permissions
+Role-based access for all CRUD operations.
+
+All actions (create/edit/delete/approve) logged with timestamp and user.
+
+Data Import/Export
+Data can be exported/imported as Excel files.
+
+Validate on import before writing to DB.
+
+Backup & Restore
+Regular scheduled backups.
+
+Restore utility available for admins.
+
+Next Steps
+Review: Validate requirements with users and stakeholders.
+
+Database Design: Define schema, tables, relationships, keys.
+
+App Development: Build UI, implement validation/business logic, connect to DB.
+
+Testing: End-to-end testing for all scenarios.
+
+Deployment: Launch to users, provide user training.
+
+Support & Maintenance: Ongoing support and updates based on feedback.
+
+Attachments:
+
+[Excel Template]
+
+[PDF Invoice Template for Parsing]
+
+[Screenshots of Required Forms/Workflows]
