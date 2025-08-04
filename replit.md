@@ -1,0 +1,79 @@
+# Drilling Data Platform
+
+## Overview
+
+This is a comprehensive drilling data management platform designed to replace Excel-based NPT (Non-Productive Time) reporting with an interactive web application. The system manages drilling operations data including NPT reports, billing sheet uploads, equipment tracking, and approval workflows across multiple rigs and drilling operations.
+
+The platform serves different user roles (drilling managers, supervisors, and admins) with role-based access control and provides features for creating NPT reports, uploading billing sheets, managing approvals, and configuring system settings.
+
+## User Preferences
+
+Preferred communication style: Simple, everyday language.
+
+## System Architecture
+
+### Frontend Architecture
+- **Framework**: React with TypeScript using Vite as the build tool
+- **UI Framework**: Shadcn/ui components built on Radix UI primitives with Tailwind CSS for styling
+- **State Management**: TanStack Query (React Query) for server state management and caching
+- **Routing**: Wouter for client-side routing
+- **Form Management**: React Hook Form with Zod validation
+- **File Uploads**: Uppy library with AWS S3 integration
+
+### Backend Architecture
+- **Runtime**: Node.js with Express.js framework
+- **Language**: TypeScript with ES modules
+- **Database ORM**: Drizzle ORM for type-safe database operations
+- **Authentication**: Replit Auth with OpenID Connect (OIDC) integration
+- **Session Management**: Express sessions with PostgreSQL session store
+- **API Design**: RESTful endpoints with proper error handling and logging
+
+### Database Design
+- **Database**: PostgreSQL (configured for Neon serverless)
+- **Schema Management**: Drizzle Kit for migrations and schema management
+- **Key Tables**:
+  - Users table with role-based access (admin, supervisor, drilling_manager)
+  - Rigs table for drilling rig information
+  - NPT Reports table for non-productive time tracking
+  - Reference tables for systems, equipment, departments, and action parties
+  - Sessions table for authentication state
+
+### Authentication & Authorization
+- **Authentication Provider**: Replit Auth using OpenID Connect
+- **Session Storage**: PostgreSQL-backed sessions with 7-day TTL
+- **Role-Based Access**: Three user roles with different permission levels
+- **Security**: HTTP-only cookies, secure session handling, and CSRF protection
+
+### File Processing Architecture
+- **Upload Handler**: Uppy dashboard with drag-and-drop support
+- **Storage**: Google Cloud Storage integration for file persistence
+- **File Processing**: Automated extraction from billing sheets (bilinks) with pattern matching for rate types
+- **Data Classification**: Automatic NBT type detection based on repair rates, reduced rates, and zero rates
+
+## External Dependencies
+
+### Cloud Services
+- **Neon Database**: Serverless PostgreSQL hosting with connection pooling
+- **Google Cloud Storage**: File storage for uploaded billing sheets and documents
+- **Replit Infrastructure**: Hosting platform with integrated development environment
+
+### Authentication & Session Management
+- **Replit Auth**: OpenID Connect provider for user authentication
+- **Connect-PG-Simple**: PostgreSQL session store for Express sessions
+
+### UI Component Libraries
+- **Radix UI**: Headless UI components for accessibility and functionality
+- **Lucide React**: Icon library for consistent iconography
+- **Tailwind CSS**: Utility-first CSS framework for styling
+
+### Development & Build Tools
+- **Vite**: Fast build tool with HMR support and TypeScript integration
+- **Drizzle Kit**: Database migration and schema management tool
+- **ESBuild**: Fast JavaScript bundler for production builds
+- **TypeScript**: Type safety across frontend, backend, and shared code
+
+### Data Processing Libraries
+- **Zod**: Runtime type validation and schema definition
+- **React Hook Form**: Form state management with validation
+- **Date-fns**: Date manipulation and formatting utilities
+- **Memoizee**: Function memoization for performance optimization
