@@ -106,18 +106,16 @@ export class DatabaseStorage implements IStorage {
   
   // NPT Report operations
   async getNptReports(filters?: { rigId?: number; userId?: string; status?: string }): Promise<NptReport[]> {
-    let query = db.select().from(nptReports);
-    
     const conditions = [];
     if (filters?.rigId) conditions.push(eq(nptReports.rigId, filters.rigId));
     if (filters?.userId) conditions.push(eq(nptReports.userId, filters.userId));
     if (filters?.status) conditions.push(eq(nptReports.status, filters.status));
     
     if (conditions.length > 0) {
-      query = query.where(and(...conditions));
+      return await db.select().from(nptReports).where(and(...conditions)).orderBy(desc(nptReports.date));
     }
     
-    return await query.orderBy(desc(nptReports.date));
+    return await db.select().from(nptReports).orderBy(desc(nptReports.date));
   }
   
   async getNptReport(id: number): Promise<NptReport | undefined> {
@@ -136,12 +134,18 @@ export class DatabaseStorage implements IStorage {
       date,
       year,
       month,
+      hours: report.hours.toString(),
     }).returning();
     return newReport;
   }
   
   async updateNptReport(id: number, report: Partial<InsertNptReport>): Promise<NptReport> {
-    let updateData = { ...report, updatedAt: new Date() };
+    let updateData: any = { ...report, updatedAt: new Date() };
+    
+    // Convert hours to string if provided
+    if (report.hours !== undefined) {
+      updateData.hours = report.hours.toString();
+    }
     
     // Recalculate year and month if date is updated
     if (report.date) {
@@ -252,15 +256,14 @@ export class DatabaseStorage implements IStorage {
   }
   
   async getEquipment(systemId?: number): Promise<Equipment[]> {
-    let query = db.select().from(equipment).where(eq(equipment.isActive, true));
     if (systemId) {
-      query = query.where(and(eq(equipment.isActive, true), eq(equipment.systemId, systemId)));
+      return await db.select().from(equipment).where(and(eq(equipment.isActive, true), eq(equipment.systemId, systemId)));
     }
-    return await query;
+    return await db.select().from(equipment).where(eq(equipment.isActive, true));
   }
   
-  async createEquipment(equipment: InsertEquipment): Promise<Equipment> {
-    const [newEquipment] = await db.insert(equipment).values(equipment).returning();
+  async createEquipment(equipmentData: InsertEquipment): Promise<Equipment> {
+    const [newEquipment] = await db.insert(equipment).values(equipmentData).returning();
     return newEquipment;
   }
   

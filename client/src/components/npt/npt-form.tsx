@@ -260,6 +260,7 @@ export default function NptForm() {
                           rows={3} 
                           placeholder="Describe the contractual process..."
                           {...field}
+                          value={field.value || ''}
                           data-testid="textarea-contractual-process"
                         />
                       </FormControl>
@@ -280,7 +281,7 @@ export default function NptForm() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>System *</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value} data-testid="select-system">
+                        <Select onValueChange={field.onChange} value={field.value || ''} data-testid="select-system">
                           <FormControl>
                             <SelectTrigger>
                               <SelectValue placeholder="Select System" />
@@ -304,7 +305,7 @@ export default function NptForm() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Parent Equipment Failure *</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value} data-testid="select-parent-equipment">
+                        <Select onValueChange={field.onChange} value={field.value || ''} data-testid="select-parent-equipment">
                           <FormControl>
                             <SelectTrigger>
                               <SelectValue placeholder="Select Equipment" />
@@ -334,6 +335,7 @@ export default function NptForm() {
                         <Input 
                           placeholder="Specify the failed part..."
                           {...field}
+                          value={field.value || ''}
                           data-testid="input-part-equipment"
                         />
                       </FormControl>
@@ -348,7 +350,7 @@ export default function NptForm() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Department Responsibility *</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value} data-testid="select-department">
+                      <Select onValueChange={field.onChange} value={field.value || ''} data-testid="select-department">
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="Select Department" />
@@ -379,6 +381,7 @@ export default function NptForm() {
                             rows={3} 
                             placeholder="Describe the immediate cause..."
                             {...field}
+                            value={field.value || ''}
                             data-testid="textarea-immediate-cause"
                           />
                         </FormControl>
@@ -397,6 +400,7 @@ export default function NptForm() {
                             rows={3} 
                             placeholder="Identify the root cause..."
                             {...field}
+                            value={field.value || ''}
                             data-testid="textarea-root-cause"
                           />
                         </FormControl>
@@ -418,6 +422,7 @@ export default function NptForm() {
                             rows={3} 
                             placeholder="Actions taken immediately..."
                             {...field}
+                            value={field.value || ''}
                             data-testid="textarea-corrective-action"
                           />
                         </FormControl>
@@ -436,6 +441,7 @@ export default function NptForm() {
                             rows={3} 
                             placeholder="Future preventive actions..."
                             {...field}
+                            value={field.value || ''}
                             data-testid="textarea-future-action"
                           />
                         </FormControl>
@@ -451,7 +457,7 @@ export default function NptForm() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Action Party *</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value} data-testid="select-action-party">
+                      <Select onValueChange={field.onChange} value={field.value || ''} data-testid="select-action-party">
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="Select Action Party" />
@@ -484,6 +490,7 @@ export default function NptForm() {
                       <Input 
                         placeholder="Required for specific hour ranges"
                         {...field}
+                        value={field.value || ''}
                         data-testid="input-notification-number"
                       />
                     </FormControl>
@@ -502,6 +509,7 @@ export default function NptForm() {
                       <Input 
                         placeholder="Enter well name"
                         {...field}
+                        value={field.value || ''}
                         data-testid="input-well-name"
                       />
                     </FormControl>
@@ -522,6 +530,7 @@ export default function NptForm() {
                     <Input 
                       placeholder="Report file path (Required for hours ≥ 6.0)"
                       {...field}
+                      value={field.value || ''}
                       data-testid="input-investigation-report"
                     />
                   </FormControl>
