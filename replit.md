@@ -4,7 +4,17 @@
 
 This is a comprehensive drilling data management platform designed to replace Excel-based NPT (Non-Productive Time) reporting with an interactive web application. The system manages drilling operations data including NPT reports, billing sheet uploads, equipment tracking, and approval workflows across multiple rigs and drilling operations.
 
-The platform serves different user roles (drilling managers, supervisors, and admins) with role-based access control and provides features for creating NPT reports, uploading billing sheets, managing approvals, and configuring system settings.
+The platform serves different user roles (drilling managers, supervisors, and admins) with role-based access control and provides complete features for creating NPT reports, uploading and processing billing sheets, managing approvals, data visualization, and configuring system settings.
+
+## Recent Changes (January 2025)
+
+### Completed Core Platform Features
+- **NPT Reporting System**: Dynamic forms with conditional fields based on NPT type (Abraj, Contractual, etc.)
+- **Billing Sheet Processing**: Automated upload, parsing, and NPT extraction with pattern recognition
+- **Advanced Reports Dashboard**: Data visualization with charts, filtering, and CSV export capabilities
+- **Approval Workflow System**: Complete review process with approve/reject functionality and role-based access
+- **Settings Management**: Comprehensive reference data management for rigs, systems, equipment, departments, and action parties
+- **Database Integration**: Full PostgreSQL integration with proper validation and error handling
 
 ## User Preferences
 
