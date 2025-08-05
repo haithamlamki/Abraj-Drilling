@@ -176,61 +176,61 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
                   {/* Column Headers - matching single form style */}
                   <tr className="bg-gray-100 border-b border-gray-300">
                     <th className="p-2 border-r border-gray-300 text-center text-xs font-medium text-gray-700">
-                      A<br/>Rig Number
+                      Rig Number
                     </th>
                     <th className="p-2 border-r border-gray-300 text-center text-xs font-medium text-gray-700">
-                      B<br/>Year
+                      Year
                     </th>
                     <th className="p-2 border-r border-gray-300 text-center text-xs font-medium text-gray-700">
-                      C<br/>Month
+                      Month
                     </th>
                     <th className="p-2 border-r border-gray-300 text-center text-xs font-medium text-gray-700">
-                      D<br/>Date
+                      Date
                     </th>
                     <th className="p-2 border-r border-gray-300 text-center text-xs font-medium text-gray-700">
-                      E<br/>Hours
+                      Hours
                     </th>
                     <th className="p-2 border-r border-gray-300 text-center text-xs font-medium text-gray-700">
-                      F<br/>NPT Type
+                      NPT Type
                     </th>
                     <th className="p-2 border-r border-gray-300 text-center text-xs font-medium text-gray-700">
-                      G<br/>System
+                      System
                     </th>
                     <th className="p-2 border-r border-gray-300 text-center text-xs font-medium text-gray-700">
-                      H<br/>Equipment
+                      Equipment
                     </th>
                     <th className="p-2 border-r border-gray-300 text-center text-xs font-medium text-gray-700">
-                      I<br/>The Part
+                      The Part
                     </th>
                     <th className="p-2 border-r border-gray-300 text-center text-xs font-medium text-gray-700">
-                      J<br/>Contractual
+                      Contractual
                     </th>
                     <th className="p-2 border-r border-gray-300 text-center text-xs font-medium text-gray-700">
-                      K<br/>Department
+                      Department
                     </th>
                     <th className="p-2 border-r border-gray-300 text-center text-xs font-medium text-gray-700">
-                      L<br/>Failure Desc.
+                      Failure Desc.
                     </th>
                     <th className="p-2 border-r border-gray-300 text-center text-xs font-medium text-gray-700">
-                      M<br/>Root Cause
+                      Root Cause
                     </th>
                     <th className="p-2 border-r border-gray-300 text-center text-xs font-medium text-gray-700">
-                      N<br/>Corrective
+                      Corrective
                     </th>
                     <th className="p-2 border-r border-gray-300 text-center text-xs font-medium text-gray-700">
-                      O<br/>Future Action
+                      Future Action
                     </th>
                     <th className="p-2 border-r border-gray-300 text-center text-xs font-medium text-gray-700">
-                      P<br/>Action Party
+                      Action Party
                     </th>
                     <th className="p-2 border-r border-gray-300 text-center text-xs font-medium text-gray-700">
-                      Q<br/>N2 Number
+                      N2 Number
                     </th>
                     <th className="p-2 border-r border-gray-300 text-center text-xs font-medium text-gray-700">
-                      R<br/>Investigation
+                      Investigation
                     </th>
                     <th className="p-2 border-r border-gray-300 text-center text-xs font-medium text-gray-700">
-                      S<br/>Well Name
+                      Well Name
                     </th>
                     <th className="p-2 text-center text-xs font-medium text-gray-700">
                       Remove
