@@ -658,14 +658,14 @@ export default function SettingsPage() {
                           <div>
                             <Label htmlFor="rig">Assigned Rig</Label>
                             <Select
-                              value={newUserData.rigId?.toString() || ""}
-                              onValueChange={(value) => setNewUserData({ ...newUserData, rigId: value ? parseInt(value) : null })}
+                              value={newUserData.rigId?.toString() || "none"}
+                              onValueChange={(value) => setNewUserData({ ...newUserData, rigId: value === "none" ? null : parseInt(value) })}
                             >
                               <SelectTrigger id="rig" data-testid="select-user-rig">
                                 <SelectValue placeholder="Select a rig" />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="">No Rig</SelectItem>
+                                <SelectItem value="none">No Rig</SelectItem>
                                 {rigs.map((rig) => (
                                   <SelectItem key={rig.id} value={rig.id.toString()}>
                                     Rig {rig.rigNumber} - {rig.location}
