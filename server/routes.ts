@@ -950,7 +950,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "User not found" });
       }
 
-      const reports = await storage.getReportsByApprover(user.role || '');
+      // Map user role to workflow role
+      const roleMapping: Record<string, string> = {
+        'Tool Pusher': 'tool_pusher',
+        'Drilling Supervisor': 'ds',
+        'DS': 'ds',
+        'PME': 'pme',
+        'E-Maintenance Engineer': 'pme',
+        'OSE': 'ose',
+        'Operation Support Engineer': 'ose',
+      };
+      
+      const workflowRole = roleMapping[user.role || ''] || user.role?.toLowerCase() || '';
+      const reports = await storage.getReportsByApprover(workflowRole);
       res.json(reports);
     } catch (error) {
       console.error("Error fetching pending reports:", error);
