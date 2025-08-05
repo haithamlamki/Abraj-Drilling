@@ -9,7 +9,9 @@ export interface BillingSheetRow {
   rateType: 'Repair Rate' | 'Reduce Repair Rate' | 'Zero Rate' | 'Operation Rate' | 'Other';
   description: string;
   extractedEquipment?: string;
+  extractedSystem?: string;
   extractedFailure?: string;
+  confidence?: number;
 }
 
 export interface BillingUploadResult {
@@ -18,6 +20,13 @@ export interface BillingUploadResult {
   processedRows: number;
   errors: string[];
   extractedData: BillingSheetRow[];
+  recognitionSummary: {
+    repairRateRows: number;
+    reducedRateRows: number;
+    zeroRateRows: number;
+    contractualRows: number;
+    abroadRows: number;
+  };
 }
 
 export interface BillingSheetUpload {

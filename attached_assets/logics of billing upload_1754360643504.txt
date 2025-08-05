@@ -1,0 +1,94 @@
+Write description that can identify from the bilinks when I upload it to the system. The system will recognize any of repair rate or reduce repair rate or zero rate. It will be NBT type abroad. And the system will create input data of the rig number and the year, then the month, then the date, then the hours, how many hours of that row. Then NBT type if it is abroad as we said it is will be any of repair rate or reduce repair rate or zero rate will be abroad. If it is reduce rate or any other rates except the operation rate it will be contractual. So then from drop down list the system will recognize the equipment or system and the failure description. Whatever data can system extracted from the bilinks. But the most important thing the date and the hour and the NBT type. I attached assemble of the input rows, columns of the rows and Rigs list and billing  as well. Thank you.
+
+
+ChatGPT said:
+Here’s a structured, system-oriented description for your “bilinks” (billing sheets) data extraction logic, integrating your requirements, the provided sample files, and best practices for automated recognition, extraction, and classification.
+
+Description for Automated Bilinks Data Extraction & Identification
+Objective
+Automate extraction of key billing data from uploaded “bilinks” (billing sheets) for multiple rigs. The system should identify and classify NBT (Non-Productive Time/Non-Billable Time) types (e.g., Repair Rate, Reduce Repair Rate, Zero Rate), associate them with rig operations (abroad vs contractual), and create structured input rows for downstream processing, validation, and analytics.
+
+Core Identification & Classification Logic
+Step 1: File Recognition & Data Parsing
+Input: Uploaded billing sheet PDFs or Excel files per rig per month.
+
+System Action: Parse each row in the sheet, extract date, rates, hour values, and descriptions.
+
+Step 2: Rig and Date Extraction
+Extract the following for every row:
+
+Rig Number (from header or filename, e.g., "RABA-44", "Raba East 47" etc.)
+
+Year, Month, Day (split from the date column, e.g., "22-06-2025" → 2025, 06, 22)
+
+Hours (from "TOTAL HOURS" or equivalent columns)
+
+Description (for context & equipment/failure identification)
+
+Step 3: NBT Type Detection & Classification
+Identify “NBT type” for each row based on the columns:
+
+Repair Rate: If the “REPAIR RATE” or similar column has a value > 0, classify as NBT type = Abroad
+
+Reduce Repair Rate / Reduced Rate / Zero Rate: If the “REDUCED RATE” or “ZERO RATE” columns have a value > 0, also classify as NBT type = Abroad
+
+Operation Rate (and other types): If the rate type is not one of the above, classify as NBT type = Contractual
+
+System logic: Use rate columns’ headers, and if any keyword like “repair”, “reduced”, or “zero” appears (case-insensitive), mark as “Abroad” type. All others except operation rate = Contractual.
+
+Note: For each row, only one NBT type applies, based on the populated column.
+
+Step 4: Equipment/System & Failure Extraction
+From the “Description” column:
+
+Use pattern matching, keyword lists, or AI/NLP to extract:
+
+Equipment or System (e.g., “Mud pumps”, “BOP”, “Mast”, “Engine”, etc.)
+
+Failure Description (e.g., “Pump failure”, “Pack off”, “Cement issue”, etc.)
+
+Populate drop-down options based on a master list (from your “Drop down lists.xlsx”).
+
+Step 5: Data Row Construction
+For each detected event/row, create a structured input with the following fields:
+
+Rig Number	Year	Month	Date	Hours	NBT Type	Equipment/System	Failure Description
+e.g., RABA-44	2025	06	01	24	Abroad	ESP	-
+e.g., Raba East 47	2025	06	22	16	Abroad	Rig Move	-
+
+For “Abroad” NBT types: populate as above. For “Contractual”: do not assign NBT type unless Reduce/Repair/Zero Rate is detected.
+
+Step 6: Equipment & Failure Description Drop-down Logic
+If present in “Description”, pre-select drop-down values.
+
+If not, leave for manual selection with options pulled from uploaded “Drop down lists.xlsx”.
+
+System auto-suggests based on match confidence; user can override.
+
+Special System Notes & Rules
+Date and Hours are always mandatory for each record.
+
+NBT Type is determined by the first non-zero rate found in the row (in order: Repair, Reduce, Zero, Operation).
+
+Abroad = any Repair/Reduced/Zero Rate, Contractual = all other rates except Operation.
+
+System should highlight and flag any ambiguous cases for manual review.
+
+Failure to extract a required field should trigger a warning for that row.
+
+Sample Data Extraction Output
+Rig Number	Year	Month	Date	Hours	NBT Type	Equipment	Failure Description
+RABA-44	2025	06	01	24	Abroad	ESP	-
+Raba East 47	2025	06	22	16	Abroad	Rig Move	-
+Raba East 46	2025	06	04	24	Abroad	Lower mast down	Rig move to new location
+...	...	...	...	...	...	...	...
+
+Advanced (Recommended for Next Iterations)
+Intelligent NLP matching for failure/equipment keywords (leveraging “NPT samples.xlsx” to enrich keyword mapping).
+
+Automatic validation: If total hours per day > 24, flag for review.
+
+Export to Excel, database, or direct integration to reporting systems.
+
+Summary
+The system must parse each uploaded billing sheet, extract and classify NBT types (Abroad/Contractual) based on repair, reduce, or zero rates, and structure data per rig, date, and hours. Equipment and failure details should be auto-suggested from the description or selected via drop-down lists.

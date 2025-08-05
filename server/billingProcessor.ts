@@ -2,29 +2,98 @@ import type { BillingSheetRow, BillingUploadResult } from "@shared/billingTypes"
 
 export class BillingProcessor {
   
-  // Keywords for rate type detection
+  // Enhanced keywords for intelligent rate type detection
   private readonly rateTypeKeywords = {
-    repairRate: ['repair rate', 'repair_rate', 'repair'],
-    reduceRate: ['reduce repair rate', 'reduced rate', 'reduce_rate', 'reduced'],
-    zeroRate: ['zero rate', 'zero_rate', 'zero'],
-    operationRate: ['operation rate', 'operation_rate', 'operation', 'drilling rate', 'drilling_rate']
+    repairRate: [
+      'repair rate', 'repair_rate', 'repair', 'rpr rate', 'rpr_rate',
+      'maintenance rate', 'maint rate', 'breakdown rate'
+    ],
+    reduceRate: [
+      'reduce repair rate', 'reduced rate', 'reduce_rate', 'reduced', 'reduced_rate',
+      'partial rate', 'reduced repair', 'rdcd rate', 'rdcd_rate', 'standby rate'
+    ],
+    zeroRate: [
+      'zero rate', 'zero_rate', 'zero', '0 rate', 'no charge', 'non-billable',
+      'npt rate', 'idle rate', 'waiting rate', 'breakdown'
+    ],
+    operationRate: [
+      'operation rate', 'operation_rate', 'operation', 'drilling rate', 'drilling_rate',
+      'productive rate', 'normal rate', 'standard rate', 'full rate', 'working rate'
+    ]
   };
 
-  // Equipment keywords for extraction
-  private readonly equipmentKeywords = [
-    'mud pump', 'pump', 'bop', 'mast', 'engine', 'esp', 'generator', 
-    'circulation', 'rotary', 'hoisting', 'power', 'safety', 'wellhead',
-    'choke', 'manifold', 'accumulator', 'liner', 'piston', 'valve'
+  // Comprehensive equipment/system keywords for extraction
+  private readonly systemEquipmentMap = {
+    'Mud Pumps': [
+      'mud pump', 'pump', 'triplex pump', 'duplex pump', 'slush pump', 'circulation pump',
+      'pump liner', 'pump piston', 'pump valve', 'suction valve', 'discharge valve'
+    ],
+    'BOP': [
+      'bop', 'blowout preventer', 'ram preventer', 'annular preventer', 'blind ram',
+      'pipe ram', 'shear ram', 'accumulator', 'choke line', 'kill line'
+    ],
+    'Hoisting': [
+      'mast', 'derrick', 'crown block', 'traveling block', 'hook', 'swivel',
+      'kelly', 'rotary table', 'drawworks', 'deadline anchor', 'fast line'
+    ],
+    'Power System': [
+      'engine', 'generator', 'power system', 'diesel engine', 'electric motor',
+      'scr house', 'distribution panel', 'transformer', 'electrical system'
+    ],
+    'Rotary': [
+      'rotary table', 'kelly', 'kelly bushing', 'rotary drive', 'top drive',
+      'rotary hose', 'rotary slip', 'master bushing'
+    ],
+    'Circulation': [
+      'circulation system', 'standpipe', 'mud manifold', 'choke manifold',
+      'mud tank', 'trip tank', 'degasser', 'desander', 'desilter', 'shale shaker'
+    ],
+    'Safety': [
+      'safety system', 'gas detector', 'fire system', 'diverter', 'emergency shutdown',
+      'h2s detector', 'escape capsule', 'lifeboat'
+    ],
+    'Wellhead': [
+      'wellhead', 'casing head', 'tubing head', 'christmas tree', 'surface safety valve',
+      'wing valve', 'master valve'
+    ],
+    'ESP': [
+      'esp', 'electric submersible pump', 'downhole pump', 'esp motor', 'esp cable',
+      'esp controller', 'variable speed drive'
+    ]
+  };
+
+  // Failure/cause keywords for intelligent extraction
+  private readonly failureKeywords = [
+    'failure', 'failed', 'break', 'broken', 'malfunction', 'issue', 'problem',
+    'fault', 'error', 'damage', 'damaged', 'leak', 'stuck', 'seized', 'worn',
+    'cracked', 'torn', 'ruptured', 'blocked', 'clogged', 'overheated', 'tripped'
   ];
 
-  // Process uploaded billing sheet content
+  // Rig name patterns for enhanced recognition
+  private readonly rigPatterns = [
+    /(?:RABA[_-]?)(\d+)/i,
+    /(?:Raba\s+East\s+)(\d+)/i,
+    /(?:Raba\s+West\s+)(\d+)/i,
+    /(?:Rig\s+)(\d+)/i,
+    /(?:Unit\s+)(\d+)/i,
+    /(?:Platform\s+)(\d+)/i
+  ];
+
+  // Process uploaded billing sheet content with intelligent recognition
   async processBillingSheet(fileName: string, content: string): Promise<BillingUploadResult> {
     const result: BillingUploadResult = {
       fileName,
       totalRows: 0,
       processedRows: 0,
       errors: [],
-      extractedData: []
+      extractedData: [],
+      recognitionSummary: {
+        repairRateRows: 0,
+        reducedRateRows: 0,
+        zeroRateRows: 0,
+        contractualRows: 0,
+        abroadRows: 0
+      }
     };
 
     try {
@@ -42,6 +111,9 @@ export class BillingProcessor {
           if (rowData) {
             result.extractedData.push(rowData);
             result.processedRows++;
+            
+            // Update recognition summary
+            this.updateRecognitionSummary(result.recognitionSummary, rowData);
           }
         } catch (error) {
           result.errors.push(`Row ${i}: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -55,17 +127,49 @@ export class BillingProcessor {
     return result;
   }
 
-  private extractRigNumber(fileName: string, content: string): string {
-    // Extract from filename patterns like "RABA-44", "Raba East 47", etc.
-    const fileNameMatch = fileName.match(/(?:RABA[_-]?|Raba\s+East\s+)(\d+)/i);
-    if (fileNameMatch) {
-      return fileNameMatch[1];
+  private updateRecognitionSummary(summary: BillingUploadResult['recognitionSummary'], rowData: BillingSheetRow): void {
+    // Count by rate type
+    switch (rowData.rateType) {
+      case 'Repair Rate':
+        summary.repairRateRows++;
+        break;
+      case 'Reduce Repair Rate':
+        summary.reducedRateRows++;
+        break;
+      case 'Zero Rate':
+        summary.zeroRateRows++;
+        break;
     }
 
-    // Extract from content header
-    const contentMatch = content.match(/rig\s*(?:number|#)?\s*:?\s*(\d+)/i);
-    if (contentMatch) {
-      return contentMatch[1];
+    // Count by NBT type
+    if (rowData.nbtType === 'Abroad') {
+      summary.abroadRows++;
+    } else {
+      summary.contractualRows++;
+    }
+  }
+
+  private extractRigNumber(fileName: string, content: string): string {
+    // Enhanced rig number extraction using multiple patterns
+    for (const pattern of this.rigPatterns) {
+      const fileNameMatch = fileName.match(pattern);
+      if (fileNameMatch) {
+        return fileNameMatch[1];
+      }
+    }
+
+    // Extract from content header with enhanced patterns
+    const contentPatterns = [
+      /rig\s*(?:number|#|no)?\s*:?\s*(\d+)/i,
+      /unit\s*(?:number|#|no)?\s*:?\s*(\d+)/i,
+      /platform\s*(?:number|#|no)?\s*:?\s*(\d+)/i
+    ];
+
+    for (const pattern of contentPatterns) {
+      const contentMatch = content.match(pattern);
+      if (contentMatch) {
+        return contentMatch[1];
+      }
     }
 
     return 'Unknown';
@@ -76,25 +180,30 @@ export class BillingProcessor {
     
     if (cells.length < 4) return null; // Need at least date, hours, rate info, description
 
-    // Extract date (assuming format like "22-06-2025" or similar)
-    const dateStr = cells[0];
+    // Enhanced date extraction with multiple column positions
+    const dateStr = this.findDateCell(cells);
     const date = this.parseDate(dateStr);
     if (!date) throw new Error(`Invalid date format: ${dateStr}`);
 
-    // Extract hours
-    const hoursStr = cells.find(cell => /^\d+(\.\d+)?$/.test(cell)) || '0';
-    const hours = parseFloat(hoursStr);
+    // Enhanced hours extraction with column recognition
+    const hours = this.findHoursCell(cells);
     if (hours <= 0) return null; // Skip rows with no hours
 
-    // Determine rate type and NBT type
-    const { rateType, nbtType } = this.determineRateType(rowText);
+    // Intelligent rate type detection with column analysis
+    const { rateType, nbtType, confidence: rateConfidence } = this.determineRateTypeAdvanced(rowText, cells);
 
-    // Extract description (usually the longest text field)
-    const description = cells.find(cell => cell.length > 10) || '';
+    // Enhanced description extraction
+    const description = this.findDescriptionCell(cells);
 
-    // Extract equipment and failure from description
-    const extractedEquipment = this.extractEquipment(description);
+    // Advanced equipment and failure extraction
+    const equipmentData = this.extractEquipment(description);
     const extractedFailure = this.extractFailure(description);
+
+    // Calculate comprehensive confidence score
+    let confidence = 0.4 + (rateConfidence * 0.2); // Base + rate detection confidence
+    if (equipmentData.equipment) confidence += 0.2;
+    if (equipmentData.system) confidence += 0.1;
+    if (extractedFailure) confidence += 0.1;
 
     return {
       rigNumber,
@@ -105,9 +214,57 @@ export class BillingProcessor {
       nbtType,
       rateType,
       description,
-      extractedEquipment,
-      extractedFailure
+      extractedEquipment: equipmentData.equipment,
+      extractedSystem: equipmentData.system,
+      extractedFailure,
+      confidence: Math.min(confidence, 1.0)
     };
+  }
+
+  private findDateCell(cells: string[]): string {
+    // Look for date patterns in multiple positions
+    for (const cell of cells.slice(0, 5)) { // Check first 5 columns
+      if (this.isDateFormat(cell)) {
+        return cell;
+      }
+    }
+    return cells[0]; // Fallback to first cell
+  }
+
+  private findHoursCell(cells: string[]): number {
+    // Look for numeric values that could represent hours
+    for (const cell of cells) {
+      const match = cell.match(/^(\d+(?:\.\d+)?)(?:\s*h(?:ours?)?)?$/i);
+      if (match) {
+        const hours = parseFloat(match[1]);
+        if (hours > 0 && hours <= 24) { // Reasonable hour range
+          return hours;
+        }
+      }
+    }
+    return 0;
+  }
+
+  private findDescriptionCell(cells: string[]): string {
+    // Find the longest text cell that's not a date or number
+    let bestDescription = '';
+    for (const cell of cells) {
+      if (cell.length > bestDescription.length && 
+          !this.isDateFormat(cell) && 
+          !/^\d+(\.\d+)?$/.test(cell)) {
+        bestDescription = cell;
+      }
+    }
+    return bestDescription;
+  }
+
+  private isDateFormat(text: string): boolean {
+    const datePatterns = [
+      /^\d{1,2}[-\/]\d{1,2}[-\/]\d{4}$/,
+      /^\d{4}[-\/]\d{1,2}[-\/]\d{1,2}$/,
+      /^\d{1,2}[-\/]\d{1,2}[-\/]\d{2}$/
+    ];
+    return datePatterns.some(pattern => pattern.test(text));
   }
 
   private parseDate(dateStr: string): Date | null {
@@ -133,43 +290,79 @@ export class BillingProcessor {
     return null;
   }
 
-  private determineRateType(rowText: string): { rateType: BillingSheetRow['rateType'], nbtType: BillingSheetRow['nbtType'] } {
+  private determineRateTypeAdvanced(rowText: string, cells: string[]): { 
+    rateType: BillingSheetRow['rateType'], 
+    nbtType: BillingSheetRow['nbtType'],
+    confidence: number 
+  } {
     const lowerText = rowText.toLowerCase();
+    let maxConfidence = 0;
+    let bestMatch = { rateType: 'Other' as BillingSheetRow['rateType'], nbtType: 'Contractual' as BillingSheetRow['nbtType'] };
 
-    // Check for repair rate
-    if (this.rateTypeKeywords.repairRate.some(keyword => lowerText.includes(keyword))) {
-      return { rateType: 'Repair Rate', nbtType: 'Abroad' };
-    }
+    // Enhanced keyword matching with confidence scoring
+    const rateTypes = [
+      { keywords: this.rateTypeKeywords.repairRate, type: 'Repair Rate', nbt: 'Abroad' },
+      { keywords: this.rateTypeKeywords.reduceRate, type: 'Reduce Repair Rate', nbt: 'Abroad' },
+      { keywords: this.rateTypeKeywords.zeroRate, type: 'Zero Rate', nbt: 'Abroad' },
+      { keywords: this.rateTypeKeywords.operationRate, type: 'Operation Rate', nbt: 'Contractual' }
+    ];
 
-    // Check for reduce repair rate
-    if (this.rateTypeKeywords.reduceRate.some(keyword => lowerText.includes(keyword))) {
-      return { rateType: 'Reduce Repair Rate', nbtType: 'Abroad' };
-    }
+    for (const rateType of rateTypes) {
+      let confidence = 0;
+      let matches = 0;
+      
+      for (const keyword of rateType.keywords) {
+        if (lowerText.includes(keyword)) {
+          matches++;
+          confidence += keyword.length / lowerText.length; // Longer matches = higher confidence
+        }
+      }
 
-    // Check for zero rate
-    if (this.rateTypeKeywords.zeroRate.some(keyword => lowerText.includes(keyword))) {
-      return { rateType: 'Zero Rate', nbtType: 'Abroad' };
-    }
-
-    // Check for operation rate
-    if (this.rateTypeKeywords.operationRate.some(keyword => lowerText.includes(keyword))) {
-      return { rateType: 'Operation Rate', nbtType: 'Contractual' };
-    }
-
-    // Default to contractual for other rates
-    return { rateType: 'Other', nbtType: 'Contractual' };
-  }
-
-  private extractEquipment(description: string): string | undefined {
-    const lowerDesc = description.toLowerCase();
-    
-    for (const equipment of this.equipmentKeywords) {
-      if (lowerDesc.includes(equipment)) {
-        return equipment.charAt(0).toUpperCase() + equipment.slice(1);
+      if (matches > 0) {
+        confidence = Math.min(confidence * matches, 1.0);
+        if (confidence > maxConfidence) {
+          maxConfidence = confidence;
+          bestMatch = {
+            rateType: rateType.type as BillingSheetRow['rateType'],
+            nbtType: rateType.nbt as BillingSheetRow['nbtType']
+          };
+        }
       }
     }
 
-    return undefined;
+    // Additional pattern analysis for column-based detection
+    const hasRateColumn = cells.some(cell => {
+      const lowerCell = cell.toLowerCase();
+      return lowerCell.includes('rate') || lowerCell.includes('repair') || lowerCell.includes('zero');
+    });
+
+    if (hasRateColumn && maxConfidence < 0.3) {
+      maxConfidence = 0.3; // Boost confidence if rate-related column found
+    }
+
+    return {
+      rateType: bestMatch.rateType,
+      nbtType: bestMatch.nbtType,
+      confidence: maxConfidence
+    };
+  }
+
+  private extractEquipment(description: string): { system?: string; equipment?: string } {
+    const lowerDesc = description.toLowerCase();
+    
+    // Search through system equipment map for best match
+    for (const [system, equipmentList] of Object.entries(this.systemEquipmentMap)) {
+      for (const equipment of equipmentList) {
+        if (lowerDesc.includes(equipment.toLowerCase())) {
+          return {
+            system,
+            equipment: equipment.charAt(0).toUpperCase() + equipment.slice(1)
+          };
+        }
+      }
+    }
+
+    return {};
   }
 
   private extractFailure(description: string): string | undefined {

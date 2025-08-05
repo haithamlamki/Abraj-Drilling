@@ -1,0 +1,16 @@
+Date,Hours,Rate Type,Description,Rig Information
+22-06-2025,8.5,Repair Rate,Mud pump failure - pump liner damaged requiring replacement,RABA-44
+23-06-2025,12.0,Zero Rate,BOP ram preventer stuck - emergency shutdown required,RABA-44  
+24-06-2025,6.5,Reduced Rate,Engine generator overheated - partial operation maintained,RABA-44
+25-06-2025,16.0,Operation Rate,Normal drilling operations - making hole,RABA-44
+26-06-2025,4.0,Repair Rate,Rotary table kelly bushing seized - replacement needed,RABA-44
+27-06-2025,9.0,Zero Rate,Power system failure - electrical distribution panel tripped,RABA-44
+28-06-2025,3.5,Reduced Rate,Circulation system degasser malfunction - reduced flow rate,RABA-44
+29-06-2025,18.0,Operation Rate,Productive drilling - casing run completed,RABA-44
+30-06-2025,7.5,Repair Rate,Hoisting crown block damaged - wire rope replacement,RABA-44
+01-07-2025,5.0,Zero Rate,Safety system H2S detector failure - operations halted,RABA-44
+02-07-2025,11.5,Repair Rate,ESP electric submersible pump motor failed,Raba East 47
+03-07-2025,14.0,Zero Rate,Wellhead christmas tree valve stuck - unable to operate,Raba East 47
+04-07-2025,8.0,Reduced Rate,Mud circulation standpipe leak - partial pressure maintained,Raba East 47
+05-07-2025,20.0,Operation Rate,Normal operations - drilling ahead successfully,Raba East 47
+06-07-2025,6.5,Repair Rate,Drawworks brake system failure - emergency repair,Raba East 47

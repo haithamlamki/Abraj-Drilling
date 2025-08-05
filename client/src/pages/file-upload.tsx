@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Upload, FileText, CheckCircle, XCircle, AlertCircle } from "lucide-react";
+import { Upload, FileText, CheckCircle, XCircle, AlertCircle, Download, Plus } from "lucide-react";
 import type { BillingUploadResult, BillingSheetRow } from "@shared/billingTypes";
 
 interface UploadedFile {
@@ -262,17 +262,47 @@ export default function FileUpload() {
                       <div className="text-2xl font-bold text-green-600">{currentResult.processedRows}</div>
                       <div className="text-sm text-gray-600">Processed</div>
                     </div>
-                    <div className="text-center p-4 bg-red-50 rounded">
-                      <div className="text-2xl font-bold text-red-600">{currentResult.errors.length}</div>
-                      <div className="text-sm text-gray-600">Errors</div>
-                    </div>
-                    <div className="text-center p-4 bg-purple-50 rounded">
-                      <div className="text-2xl font-bold text-purple-600">
-                        {currentResult.extractedData.filter(d => d.nbtType === 'Abroad').length}
+                    <div className="text-center p-4 bg-orange-50 rounded">
+                      <div className="text-2xl font-bold text-orange-600">
+                        {currentResult.recognitionSummary?.abroadRows || currentResult.extractedData.filter(d => d.nbtType === 'Abroad').length}
                       </div>
                       <div className="text-sm text-gray-600">Abroad NPT</div>
                     </div>
+                    <div className="text-center p-4 bg-purple-50 rounded">
+                      <div className="text-2xl font-bold text-purple-600">
+                        {currentResult.recognitionSummary?.contractualRows || currentResult.extractedData.filter(d => d.nbtType === 'Contractual').length}
+                      </div>
+                      <div className="text-sm text-gray-600">Contractual</div>
+                    </div>
                   </div>
+
+                  {/* Enhanced Recognition Summary */}
+                  {currentResult.recognitionSummary && (
+                    <div className="bg-gray-50 p-4 rounded-lg">
+                      <div className="flex items-center gap-2 mb-3">
+                        <CheckCircle className="h-5 w-5 text-green-600" />
+                        <h4 className="font-semibold">Intelligent Rate Recognition Summary</h4>
+                      </div>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                        <div className="flex justify-between items-center">
+                          <span>Repair Rate:</span>
+                          <Badge variant="destructive">{currentResult.recognitionSummary.repairRateRows}</Badge>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span>Reduced Rate:</span>
+                          <Badge variant="secondary">{currentResult.recognitionSummary.reducedRateRows}</Badge>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span>Zero Rate:</span>
+                          <Badge variant="outline">{currentResult.recognitionSummary.zeroRateRows}</Badge>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span>Operation:</span>
+                          <Badge variant="default">{currentResult.recognitionSummary.contractualRows}</Badge>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {currentResult.errors.length > 0 && (
                     <Alert variant="destructive">
@@ -293,36 +323,66 @@ export default function FileUpload() {
 
                   {currentResult.extractedData.length > 0 && (
                     <div className="space-y-4">
-                      <h4 className="font-semibold">Extracted Data Preview (First 5 rows):</h4>
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-semibold">Intelligent Extraction Results - Preview (First 5 rows)</h4>
+                        <p className="text-sm text-gray-500">
+                          {currentResult.extractedData.length} total rows extracted
+                        </p>
+                      </div>
+                      
                       <div className="overflow-x-auto">
                         <table className="w-full border-collapse border border-gray-300">
                           <thead>
                             <tr className="bg-gray-50">
-                              <th className="border border-gray-300 p-2 text-left">Rig</th>
-                              <th className="border border-gray-300 p-2 text-left">Date</th>
-                              <th className="border border-gray-300 p-2 text-left">Hours</th>
-                              <th className="border border-gray-300 p-2 text-left">NBT Type</th>
-                              <th className="border border-gray-300 p-2 text-left">Equipment</th>
-                              <th className="border border-gray-300 p-2 text-left">Description</th>
+                              <th className="border border-gray-300 p-2 text-left text-xs">Rig</th>
+                              <th className="border border-gray-300 p-2 text-left text-xs">Date</th>
+                              <th className="border border-gray-300 p-2 text-left text-xs">Hours</th>
+                              <th className="border border-gray-300 p-2 text-left text-xs">NBT Type</th>
+                              <th className="border border-gray-300 p-2 text-left text-xs">Rate Type</th>
+                              <th className="border border-gray-300 p-2 text-left text-xs">System</th>
+                              <th className="border border-gray-300 p-2 text-left text-xs">Equipment</th>
+                              <th className="border border-gray-300 p-2 text-left text-xs">Confidence</th>
+                              <th className="border border-gray-300 p-2 text-left text-xs">Description</th>
                             </tr>
                           </thead>
                           <tbody>
                             {currentResult.extractedData.slice(0, 5).map((row, index) => (
-                              <tr key={index}>
-                                <td className="border border-gray-300 p-2">{row.rigNumber}</td>
-                                <td className="border border-gray-300 p-2">
+                              <tr key={index} className="hover:bg-gray-50">
+                                <td className="border border-gray-300 p-2 font-medium">{row.rigNumber}</td>
+                                <td className="border border-gray-300 p-2 text-sm">
                                   {new Date(row.date).toLocaleDateString()}
                                 </td>
-                                <td className="border border-gray-300 p-2">{row.hours}</td>
+                                <td className="border border-gray-300 p-2 text-sm">{row.hours}</td>
                                 <td className="border border-gray-300 p-2">
                                   <Badge variant={row.nbtType === 'Abroad' ? 'destructive' : 'secondary'}>
                                     {row.nbtType}
                                   </Badge>
                                 </td>
                                 <td className="border border-gray-300 p-2">
+                                  <Badge variant="outline" className="text-xs">
+                                    {row.rateType}
+                                  </Badge>
+                                </td>
+                                <td className="border border-gray-300 p-2 text-sm text-blue-600 font-medium">
+                                  {row.extractedSystem || '-'}
+                                </td>
+                                <td className="border border-gray-300 p-2 text-sm">
                                   {row.extractedEquipment || '-'}
                                 </td>
-                                <td className="border border-gray-300 p-2 max-w-xs truncate">
+                                <td className="border border-gray-300 p-2">
+                                  <div className="flex items-center gap-1">
+                                    <div 
+                                      className={`h-2 w-6 rounded ${
+                                        (row.confidence || 0) > 0.8 ? 'bg-green-500' :
+                                        (row.confidence || 0) > 0.6 ? 'bg-yellow-500' : 'bg-red-500'
+                                      }`}
+                                    />
+                                    <span className="text-xs">
+                                      {Math.round((row.confidence || 0) * 100)}%
+                                    </span>
+                                  </div>
+                                </td>
+                                <td className="border border-gray-300 p-2 max-w-xs truncate text-sm" title={row.description}>
                                   {row.description}
                                 </td>
                               </tr>
@@ -331,15 +391,55 @@ export default function FileUpload() {
                         </table>
                       </div>
 
-                      <Button 
-                        onClick={handleCreateReports}
-                        disabled={createReportsMutation.isPending}
-                        className="w-full"
-                        data-testid="button-create-reports"
-                      >
-                        {createReportsMutation.isPending ? "Creating Reports..." : 
-                         `Create ${currentResult.extractedData.length} NPT Reports`}
-                      </Button>
+                      {/* Action Buttons */}
+                      <div className="flex gap-4">
+                        <Button 
+                          variant="outline" 
+                          onClick={() => {
+                            // Export to CSV functionality
+                            const csvContent = [
+                              ['Date', 'Rig', 'Year', 'Month', 'Hours', 'NBT Type', 'Rate Type', 'System', 'Equipment', 'Confidence %', 'Description'],
+                              ...currentResult.extractedData.map(row => [
+                                new Date(row.date).toLocaleDateString(),
+                                row.rigNumber,
+                                row.year,
+                                row.month,
+                                row.hours,
+                                row.nbtType,
+                                row.rateType,
+                                row.extractedSystem || '',
+                                row.extractedEquipment || '',
+                                Math.round((row.confidence || 0) * 100),
+                                row.description.replace(/,/g, ';') // Replace commas to avoid CSV issues
+                              ])
+                            ].map(row => row.join(',')).join('\n');
+                            
+                            const blob = new Blob([csvContent], { type: 'text/csv' });
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = `extracted_npt_data_${currentResult.fileName.replace(/\.[^/.]+$/, '')}.csv`;
+                            document.body.appendChild(a);
+                            a.click();
+                            document.body.removeChild(a);
+                            URL.revokeObjectURL(url);
+                          }}
+                          data-testid="button-export-csv"
+                        >
+                          <Download className="h-4 w-4 mr-2" />
+                          Export Detailed CSV
+                        </Button>
+
+                        <Button 
+                          onClick={handleCreateReports}
+                          disabled={createReportsMutation.isPending}
+                          className="flex-1"
+                          data-testid="button-create-reports"
+                        >
+                          {createReportsMutation.isPending ? "Creating Reports..." : 
+                           `Create ${currentResult.extractedData.length} NPT Reports`}
+                        </Button>
+                      </div>
                     </div>
                   )}
                 </CardContent>
