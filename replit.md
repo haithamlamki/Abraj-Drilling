@@ -25,6 +25,10 @@ The platform serves different user roles (drilling managers, supervisors, and ad
 - **Excel Format Layout**: Complete NPT form redesigned as exact 19-column Excel table format with labeled cells (A-S) matching original spreadsheet structure
 - **Complete Admin Center**: Full user management system with create/edit/delete operations, role assignments, and rig associations for admins
 - **PDF Support Added**: System now accepts PDF billing sheets with automatic NBT classification based on repair/reduce repair/zero rate patterns. PDF processing demonstrates intelligent extraction with realistic sample data showing how the system would classify different rate types and extract equipment details
+- **Dynamic Rate Type Extraction**: Rate types are now extracted dynamically from table column headers instead of using predetermined values
+- **29 Contractual NBT Categories**: System recognizes and classifies 29 specific Contractual categories (Annual Maintenance, BOP, Camp, CAT IV, Cementing, Circulating System, Drawworks, Drill line, Drill String, Eid Break, Events, Handling System, Hoisting & Lifting, HSE, Human Factor, Instrumentation, Logging, Moving System, Pipe Cat, Power System, Ramadan Break, Rig move, Service, Service TDS, Structure, Top Drive, Waiting, Weather, Well Control)
+- **Contractual Process Mapping**: Descriptions matching Contractual categories are automatically mapped to the contractualProcess field
+- **Operating Rate Filtering**: Operating Rate entries are automatically filtered out and do not generate NPT reports
 
 ## User Preferences
 

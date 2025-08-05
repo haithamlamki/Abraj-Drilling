@@ -5,6 +5,39 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
+// Contractual NBT categories
+const CONTRACTUAL_CATEGORIES = [
+  'Annual Maintenance',
+  'BOP',
+  'Camp',
+  'CAT IV',
+  'Cementing',
+  'Circulating System',
+  'Drawworks',
+  'Drill line',
+  'Drill String',
+  'Eid Break',
+  'Events',
+  'Handling System',
+  'Hoisting & Lifting',
+  'HSE',
+  'Human Factor',
+  'Instrumentation',
+  'Logging',
+  'Moving System',
+  'Pipe Cat',
+  'Power System',
+  'Ramadan Break',
+  'Rig move',
+  'Service',
+  'Service TDS',
+  'Structure',
+  'Top Drive',
+  'Waiting',
+  'Weather',
+  'Well Control'
+];
+
 interface ParsedBillingRow {
   date: string;
   obmOperatingRate: number;
@@ -78,11 +111,19 @@ async function extractBillingDataFromPDF(buffer: Buffer): Promise<BillingSheetRo
       month: 'May',
       hours: 3,
       nbtType: 'Contractual',
-      rateType: 'Reduce Repair Rate',
-      description: 'Cont. POOH 12.25" Baker PDC bit packed BHA on 5" DP stands from 1069 m to surface. Perform RAY CBL-VDL-GR-CCL WL logging.',
+      rateType: 'Reduced Rate',
+      description: 'Logging',
       extractedSystem: undefined,
       extractedEquipment: undefined,
-      extractedFailure: undefined
+      extractedFailure: undefined,
+      nptReportData: {
+        rigId: '96',
+        date: '2025-05-22',
+        hours: 3,
+        nptType: 'Contractual',
+        contractualProcess: 'Logging',
+        status: 'Draft'
+      }
     },
     // Rig Move Statistical entries - 100 hours total across 5 days
     {
@@ -92,11 +133,19 @@ async function extractBillingDataFromPDF(buffer: Buffer): Promise<BillingSheetRo
       month: 'May',
       hours: 18,
       nbtType: 'Contractual',
-      rateType: 'Other',
-      description: 'Rig Move (Rig Move Statistical)',
+      rateType: 'Rig Move Statistical',
+      description: 'Rig move',
       extractedSystem: undefined,
       extractedEquipment: undefined,
-      extractedFailure: undefined
+      extractedFailure: undefined,
+      nptReportData: {
+        rigId: '96',
+        date: '2025-05-11',
+        hours: 18,
+        nptType: 'Contractual',
+        contractualProcess: 'Rig move',
+        status: 'Draft'
+      }
     },
     {
       date: new Date('2025-05-12'),
@@ -105,11 +154,19 @@ async function extractBillingDataFromPDF(buffer: Buffer): Promise<BillingSheetRo
       month: 'May',
       hours: 24,
       nbtType: 'Contractual',
-      rateType: 'Other',
-      description: 'General rig down. (Rig Move Statistical)',
+      rateType: 'Rig Move Statistical',
+      description: 'Rig move',
       extractedSystem: undefined,
       extractedEquipment: undefined,
-      extractedFailure: undefined
+      extractedFailure: undefined,
+      nptReportData: {
+        rigId: '96',
+        date: '2025-05-12',
+        hours: 24,
+        nptType: 'Contractual',
+        contractualProcess: 'Rig move',
+        status: 'Draft'
+      }
     },
     {
       date: new Date('2025-05-13'),
@@ -118,11 +175,19 @@ async function extractBillingDataFromPDF(buffer: Buffer): Promise<BillingSheetRo
       month: 'May',
       hours: 24,
       nbtType: 'Contractual',
-      rateType: 'Other',
-      description: 'General rig down, rig move off location & rig up. (Rig Move Statistical)',
+      rateType: 'Rig Move Statistical',
+      description: 'Rig move',
       extractedSystem: undefined,
       extractedEquipment: undefined,
-      extractedFailure: undefined
+      extractedFailure: undefined,
+      nptReportData: {
+        rigId: '96',
+        date: '2025-05-13',
+        hours: 24,
+        nptType: 'Contractual',
+        contractualProcess: 'Rig move',
+        status: 'Draft'
+      }
     },
     {
       date: new Date('2025-05-14'),
@@ -131,11 +196,19 @@ async function extractBillingDataFromPDF(buffer: Buffer): Promise<BillingSheetRo
       month: 'May',
       hours: 24,
       nbtType: 'Contractual',
-      rateType: 'Other',
-      description: 'Raising the mast & Raising the Top Drive (Rig Move Statistical)',
+      rateType: 'Rig Move Statistical',
+      description: 'Rig move',
       extractedSystem: undefined,
       extractedEquipment: undefined,
-      extractedFailure: undefined
+      extractedFailure: undefined,
+      nptReportData: {
+        rigId: '96',
+        date: '2025-05-14',
+        hours: 24,
+        nptType: 'Contractual',
+        contractualProcess: 'Rig move',
+        status: 'Draft'
+      }
     },
     {
       date: new Date('2025-05-15'),
@@ -144,11 +217,19 @@ async function extractBillingDataFromPDF(buffer: Buffer): Promise<BillingSheetRo
       month: 'May',
       hours: 10,
       nbtType: 'Contractual',
-      rateType: 'Other',
-      description: 'P/up & m/Up 8 1/4"DC X 9 Joints & 5" HWDP X 12 Joints & rack back stands. (Rig Move Statistical)',
+      rateType: 'Rig Move Statistical',
+      description: 'Rig move',
       extractedSystem: undefined,
       extractedEquipment: undefined,
-      extractedFailure: undefined
+      extractedFailure: undefined,
+      nptReportData: {
+        rigId: '96',
+        date: '2025-05-15',
+        hours: 10,
+        nptType: 'Contractual',
+        contractualProcess: 'Rig move',
+        status: 'Draft'
+      }
     }
   ];
   
@@ -275,23 +356,43 @@ function convertToBillingRow(parsed: ParsedBillingRow, metadata: any): BillingSh
   const [day, month, year] = parsed.date.split('-');
   const parsedDate = new Date(`${year}-${month}-${day}`);
   
-  // Determine NBT type based on rates
-  let nbtType: 'Contractual' | 'Abroad' = 'Contractual';
-  let rateType: 'Repair Rate' | 'Reduce Repair Rate' | 'Zero Rate' | 'Operation Rate' | 'Other' = 'Operation Rate';
+  // Skip Operating Rate entries - they should not generate NPT reports
+  if (parsed.operatingRate > 0 || parsed.obmOperatingRate > 0) {
+    return null;
+  }
   
+  // Determine rate type dynamically based on which column has hours
+  let rateType: BillingSheetRow['rateType'] = 'Other';
+  
+  // Dynamic rate type extraction based on which rate column has value
   if (parsed.reduceRepairRate > 0) {
-    nbtType = 'Abroad';
     rateType = 'Repair Rate';
   } else if (parsed.reducedRate > 0 || parsed.obmReducedRate > 0) {
-    nbtType = 'Abroad';
-    rateType = 'Reduce Repair Rate';
-  } else if (parsed.totalHours > 0 && parsed.operatingRate === 0 && parsed.obmOperatingRate === 0) {
-    nbtType = 'Abroad';
+    rateType = 'Reduced Rate';
+  } else if (parsed.rigMove && parsed.rigMove > 0) {
+    rateType = 'Rig Move Statistical';
+  } else if (parsed.specialRate > 0 || parsed.obmSpecialRate && parsed.obmSpecialRate > 0) {
+    rateType = 'Other'; // Special rate
+  } else if (parsed.totalHours > 0) {
     rateType = 'Zero Rate';
   }
   
+  // Check if description matches any Contractual category
+  const contractualCategory = matchContractualCategory(parsed.description);
+  const nbtType: 'Contractual' | 'Abroad' = contractualCategory ? 'Contractual' : 'Abroad';
+  
   // Extract equipment and system from description
   const extraction = extractEquipmentAndSystem(parsed.description);
+  
+  // Create NPT report data
+  const nptReportData = contractualCategory ? {
+    rigId: metadata.rigNumber || '',
+    date: parsedDate.toISOString().split('T')[0],
+    hours: parsed.totalHours,
+    nptType: 'Contractual' as const,
+    contractualProcess: contractualCategory,
+    status: 'Draft' as const
+  } : undefined;
   
   return {
     rigNumber: metadata.rigNumber || '',
@@ -304,8 +405,33 @@ function convertToBillingRow(parsed: ParsedBillingRow, metadata: any): BillingSh
     description: parsed.description,
     extractedSystem: extraction.system,
     extractedEquipment: extraction.equipment,
-    extractedFailure: extraction.failure
+    extractedFailure: extraction.failure,
+    nptReportData
   };
+}
+
+// Check if description matches any Contractual category
+function matchContractualCategory(description: string): string | undefined {
+  const lowerDesc = description.toLowerCase();
+  
+  for (const category of CONTRACTUAL_CATEGORIES) {
+    if (lowerDesc.includes(category.toLowerCase())) {
+      return category;
+    }
+  }
+  
+  // Check for variations
+  if (lowerDesc.includes('rig move') || lowerDesc.includes('rig down') || 
+      lowerDesc.includes('raising the mast') || lowerDesc.includes('general rig down')) {
+    return 'Rig move';
+  }
+  
+  if (lowerDesc.includes('logging') || lowerDesc.includes('wl logging') || 
+      lowerDesc.includes('cbr') || lowerDesc.includes('vdl')) {
+    return 'Logging';
+  }
+  
+  return undefined;
 }
 
 function extractEquipmentAndSystem(description: string): {
