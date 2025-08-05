@@ -170,8 +170,8 @@ export class DatabaseStorage implements IStorage {
     let updateData: any = { ...report, updatedAt: new Date() };
     
     // Convert hours to string if provided and it's a number
-    if (report.hours !== undefined && typeof report.hours === 'number') {
-      updateData.hours = report.hours.toString();
+    if (updateData.hours !== undefined && typeof updateData.hours === 'number') {
+      updateData.hours = updateData.hours.toString();
     }
     
     // Recalculate year and month if date is updated

@@ -166,6 +166,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/npt-reports/:id', isAuthenticated, async (req: any, res) => {
     try {
       const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "Invalid report ID" });
+      }
       const report = await storage.getNptReport(id);
       
       if (!report) {
@@ -248,7 +251,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Validation failed", errors });
       }
       
-      const report = await storage.updateNptReport(id, validatedData);
+      // Convert hours to string for database storage
+      const dataToUpdate = { ...validatedData };
+      if (dataToUpdate.hours !== undefined) {
+        dataToUpdate.hours = dataToUpdate.hours.toString();
+      }
+      const report = await storage.updateNptReport(id, dataToUpdate);
       res.json(report);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -518,10 +526,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               date: new Date(row.nptReportData.date),
               year: row.year,
               month: row.month,
-              userId: user.id,
-              createdBy: userId,
-              createdAt: new Date(),
-              updatedAt: new Date()
+              userId: user.id
             };
           } else {
             // Fallback to basic extraction
@@ -536,13 +541,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
               parentEquipment: row.extractedEquipment || null,
               partEquipment: row.extractedFailure || null,
               contractualProcess: row.nbtType === 'Contractual' ? row.description : null,
-              immediateCause: row.nbtType === 'Abroad' ? row.description : null,
-              wellName: null,
+              immediateCause: row.nbtType === 'Abraj' ? row.description : null,
+              wellName: null,  
               userId: user.id,
-              status: 'Draft' as const,
-              createdBy: userId,
-              createdAt: new Date(),
-              updatedAt: new Date()
+              status: 'Draft' as const
             };
           }
 
@@ -684,9 +686,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       await storage.updateNptReport(reportId, {
-        status: 'approved',
-        approvedBy: userId,
-        approvedAt: new Date()
+        status: 'Approved'
       });
 
       res.json({ message: "Report approved successfully" });
@@ -712,10 +712,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       await storage.updateNptReport(reportId, {
-        status: 'rejected',
-        rejectionReason: reason,
-        rejectedBy: userId,
-        rejectedAt: new Date()
+        status: 'Rejected',
+        rejectionReason: reason
       });
 
       res.json({ message: "Report rejected successfully" });
@@ -744,8 +742,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       await storage.updateNptReport(reportId, {
-        status: 'pending',
-        submittedAt: new Date()
+        status: 'Pending Review'
       });
 
       res.json({ message: "Report submitted for approval successfully" });

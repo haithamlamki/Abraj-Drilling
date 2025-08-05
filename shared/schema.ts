@@ -58,7 +58,7 @@ export const nptReports = pgTable("npt_reports", {
   date: timestamp("date").notNull(),
   year: integer("year").notNull(),
   month: varchar("month", { length: 3 }).notNull(),
-  hours: text("hours").notNull(),
+  hours: decimal("hours", { precision: 10, scale: 2 }).notNull(),
   nptType: varchar("npt_type").notNull(), // Contractual, Abraj
   system: varchar("system"),
   parentEquipment: varchar("parent_equipment"),
@@ -154,7 +154,7 @@ export const insertNptReportSchema = createInsertSchema(nptReports).omit({
   updatedAt: true,
 }).extend({
   date: z.string().transform((val) => new Date(val)),
-  hours: z.string().transform((val) => parseFloat(val)),
+  hours: z.number().positive(),
 });
 
 export const insertRigSchema = createInsertSchema(rigs).omit({

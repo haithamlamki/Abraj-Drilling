@@ -1,0 +1,223 @@
+Field-by-Field Requirements
+1. Rig Number
+Description: Rig Unit Number
+
+Data Type: Integer
+
+Source: Bound to the logged-in user's assigned rig number
+
+Permitted Values: [103, 104, 105, ..., 306] (list all rig numbers as specified)
+
+Logic:
+
+This field is populated automatically based on the logged-in user and cannot be edited by the user.
+
+2. Year
+Description: Year of the event
+
+Data Type: Integer
+
+Source: Derived automatically from Date
+
+Logic:
+
+Auto-filled and updated whenever Date changes
+
+Not user-editable
+
+3. Month
+Description: Month of the event
+
+Data Type: String (Short month name, e.g. Jan, Feb)
+
+Source: Derived automatically from Date
+
+Logic:
+
+Auto-filled and updated whenever Date changes
+
+Not user-editable
+
+4. Date
+Description: Date of event
+
+Data Type: Date
+
+Source: User entry
+
+Logic:
+
+Required field
+
+Valid date only
+
+Auto-updates Year and Month fields
+
+5. Hrs.
+Description: NPT hours for this entry
+
+Data Type: Decimal
+
+Source: User entry
+
+Logic:
+
+Required
+
+Must be positive numeric value
+
+6. NPT type
+Description: Type of NPT
+
+Data Type: Dropdown (String)
+
+Options: Contractual, Abraj
+
+Logic:
+
+Required
+
+Controls visibility/editability of related fields:
+
+If “Contractual”: Only “Contractual Process” is editable; all equipment/failure/cause fields are disabled.
+
+If “Abraj”: All equipment/failure/cause fields are editable; “Contractual Process” is disabled.
+
+7. SYSTEM
+Description: Affected system
+
+Data Type: Dropdown (String)
+
+Options: As per existing data (expandable)
+
+Logic:
+
+Required
+
+Filters available Parent Equipment Failure options
+
+8. Parent Equipment Failure
+Description: Main equipment failed
+
+Data Type: Dropdown (String)
+
+Options: Filtered by SYSTEM
+
+Logic:
+
+Required if NPT type = Abraj, disabled otherwise
+
+Admin can add new categories
+
+9. Part Equipment Failure
+Description: Failed sub-component
+
+Data Type: String
+
+Source: User entry
+
+Logic:
+
+Required if NPT type = Abraj, disabled otherwise
+
+10. Contractual Process
+Description: Contractual process description
+
+Data Type: String
+
+Source: User entry
+
+Logic:
+
+Required if NPT type = Contractual, disabled otherwise
+
+11. Department Responsibility
+Description: Department responsible for the NPT
+
+Data Type: Dropdown (String)
+
+Options: Drilling, M.Maintenance, E.Maintenance, Project (deduplicate as needed)
+
+Logic:
+
+Required if NPT type = Abraj, disabled otherwise
+
+12. Immediate Cause of Failure
+Description: Immediate failure cause
+
+Data Type: String
+
+Source: User entry
+
+Logic:
+
+Required if NPT type = Abraj, disabled otherwise
+
+Spellcheck as possible (custom glossary or API)
+
+13. Root Cause
+Description: Root cause of failure
+
+Data Type: String
+
+Source: User entry
+
+Logic:
+
+Required if NPT type = Abraj, disabled otherwise
+
+Spellcheck as possible
+
+14. Immediate Corrective Action
+Description: Immediate corrective action taken
+
+Data Type: String
+
+Source: User entry
+
+Logic:
+
+Required if NPT type = Abraj, disabled otherwise
+
+15. Future Action & Improvement
+Description: Future action or improvement plan
+
+Data Type: String
+
+Source: User entry
+
+Logic:
+
+Required if NPT type = Abraj, disabled otherwise
+
+16. Action Party
+Description: Responsible party for action
+
+Data Type: Dropdown (String)
+
+Options: E.Maintenance, M.Maintenance, Drilling, CE, C.E, TP, CM, ELE, MECHANIC, Logging, DS, etc. (deduplicate as needed)
+
+Logic:
+
+Required if NPT type = Abraj, disabled otherwise
+
+17. Notification Number (N2)
+Data Type: String/Integer (manual user entry)
+
+Required only if:
+
+For Drilling & Project: If Hrs is between 3.75 and 5.75 (inclusive)
+
+For Maintenance (M/E): If Hrs is between 2.0 and 5.75 (inclusive)
+
+18. Failure Investigation Report
+Data Type: File upload or AI-generated report
+
+Required only if: Hrs >= 6.0 (any department)
+
+19. Well Name
+Description: Well Name
+
+Data Type: String or Dropdown
+
+Source: User entry or selection from rig move reports
