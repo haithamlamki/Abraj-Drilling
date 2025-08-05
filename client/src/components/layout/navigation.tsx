@@ -22,12 +22,14 @@ export default function Navigation() {
               {user?.rigId && <span> - Rig {user.rigId}</span>}
             </div>
             <Button 
-              variant="ghost"
+              variant="outline"
               size="sm"
               onClick={() => window.location.href = '/api/logout'}
               data-testid="button-logout"
+              className="flex items-center gap-2"
             >
               <i className="fas fa-sign-out-alt"></i>
+              Logout
             </Button>
           </div>
         </div>
