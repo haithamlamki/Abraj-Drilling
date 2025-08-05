@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest } from "@/lib/queryClient";
@@ -27,6 +28,7 @@ export default function FileUpload() {
   const { toast } = useToast();
   const { isAuthenticated, isLoading } = useAuth();
   const queryClient = useQueryClient();
+  const [location, setLocation] = useLocation();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [currentResult, setCurrentResult] = useState<BillingUploadResult | null>(null);
@@ -156,8 +158,12 @@ export default function FileUpload() {
   };
 
   const handleCreateReports = () => {
-    if (currentResult?.extractedData) {
-      createReportsMutation.mutate(currentResult.extractedData);
+    if (currentResult?.extractedData && currentResult.extractedData.length > 0) {
+      // Store data in session storage and navigate to NPT form
+      const firstRow = currentResult.extractedData[0];
+      sessionStorage.setItem('billingData', JSON.stringify(firstRow));
+      sessionStorage.setItem('allBillingData', JSON.stringify(currentResult.extractedData));
+      setLocation('/npt-reports/new');
     }
   };
 

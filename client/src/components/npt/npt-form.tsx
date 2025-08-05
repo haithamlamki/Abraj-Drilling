@@ -15,7 +15,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Info } from "lucide-react";
 import type { System, Equipment, Department, ActionParty, InsertNptReport } from "@shared/schema";
+import type { BillingSheetRow } from "@shared/billingTypes";
 
 const formSchema = insertNptReportSchema.extend({
   date: z.string().min(1, "Date is required"),
@@ -48,15 +51,31 @@ export default function NptForm() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [selectedNptType, setSelectedNptType] = useState<string>("");
+  const [billingData, setBillingData] = useState<BillingSheetRow | null>(null);
 
-  const form = useForm<FormData>({
-    resolver: zodResolver(formSchema),
-    defaultValues: {
-      rigId: user?.rigId || 0,
+  // Check for billing data in sessionStorage
+  useEffect(() => {
+    const storedBillingData = sessionStorage.getItem('billingData');
+    if (storedBillingData) {
+      try {
+        const data = JSON.parse(storedBillingData) as BillingSheetRow;
+        setBillingData(data);
+        sessionStorage.removeItem('billingData'); // Clear after reading
+        sessionStorage.removeItem('allBillingData'); // Also clear the all data
+      } catch (error) {
+        console.error('Error parsing billing data:', error);
+      }
+    }
+  }, []);
+
+  // Initialize form with billing data if available
+  const getDefaultValues = () => {
+    const baseValues = {
+      rigId: user?.rigId || (billingData?.rigNumber ? parseInt(billingData.rigNumber) : 0),
       userId: user?.id || "",
-      date: "",
-      hours: 0,
-      nptType: "",
+      date: billingData?.date ? new Date(billingData.date).toISOString().split('T')[0] : "",
+      hours: billingData?.hours || 0,
+      nptType: billingData?.nbtType || "",
       system: "",
       parentEquipment: "",
       partEquipment: "",
@@ -71,8 +90,46 @@ export default function NptForm() {
       investigationReport: "",
       wellName: "",
       status: "Draft",
-    },
+    };
+
+    // Pre-populate fields based on NPT type and billing data
+    if (billingData) {
+      if (billingData.nbtType === 'Contractual') {
+        baseValues.contractualProcess = billingData.description || "";
+        // If system is extracted (for contractual categories)
+        if (billingData.extractedSystem) {
+          baseValues.system = billingData.extractedSystem;
+        }
+      } else if (billingData.nbtType === 'Abraj') {
+        // For Abraj, populate fields from extracted data
+        if (billingData.extractedSystem) {
+          baseValues.system = billingData.extractedSystem;
+        }
+        if (billingData.extractedEquipment) {
+          baseValues.parentEquipment = billingData.extractedEquipment;
+        }
+        // The form will need manual input for other fields
+      }
+    }
+
+    return baseValues;
+  };
+
+  const form = useForm<FormData>({
+    resolver: zodResolver(formSchema),
+    defaultValues: getDefaultValues(),
   });
+
+  // Update form when billing data is loaded
+  useEffect(() => {
+    if (billingData) {
+      const values = getDefaultValues();
+      Object.keys(values).forEach((key) => {
+        form.setValue(key as any, values[key as keyof typeof values]);
+      });
+      setSelectedNptType(billingData.nbtType || "");
+    }
+  }, [billingData]);
 
   // Fetch reference data
   const { data: systems = [] } = useQuery<System[]>({
@@ -201,6 +258,17 @@ export default function NptForm() {
               <h3 className="text-sm font-semibold text-green-800 mb-1">Excel Format NPT Data Entry</h3>
               <p className="text-xs text-green-700">19-column format matching Excel structure - enter data cell by cell</p>
             </div>
+
+            {/* Billing Data Alert */}
+            {billingData && (
+              <Alert className="mb-4">
+                <Info className="h-4 w-4" />
+                <AlertDescription>
+                  This form has been pre-populated with data extracted from the billing sheet. 
+                  Please review and complete any missing fields before saving.
+                </AlertDescription>
+              </Alert>
+            )}
 
             {/* Excel-style Table Headers */}
             <div className="border border-gray-300 rounded-lg overflow-hidden">
