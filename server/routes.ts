@@ -523,7 +523,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/billing-convert', isAuthenticated, async (req: any, res) => {
+  app.post('/api/npt-reports/from-billing', isAuthenticated, async (req: any, res) => {
     try {
       const { rows }: { rows: BillingSheetRow[] } = req.body;
       const userId = req.user.claims.sub;
