@@ -371,7 +371,7 @@ export default function FileUpload() {
                               <tr key={index} className="hover:bg-gray-50">
                                 <td className="border border-gray-300 p-2 font-medium">{row.rigNumber}</td>
                                 <td className="border border-gray-300 p-2 text-sm">
-                                  {new Date(row.date).toLocaleDateString()}
+                                  {row.date}
                                 </td>
                                 <td className="border border-gray-300 p-2 text-sm">{row.hours}</td>
                                 <td className="border border-gray-300 p-2">
@@ -484,7 +484,7 @@ export default function FileUpload() {
                           <div>
                             <div className="font-medium">{upload.fileName}</div>
                             <div className="text-sm text-gray-500">
-                              {new Date(upload.uploadDate).toLocaleDateString()}
+                              {new Date(upload.uploadDate).toLocaleDateString('en-GB').replace(/\//g, '-')}
                             </div>
                           </div>
                         </div>

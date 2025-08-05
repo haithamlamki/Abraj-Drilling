@@ -428,7 +428,7 @@ export class BillingProcessor {
   }) {
     const baseData = {
       rigId: data.rigNumber,
-      date: data.date.toISOString().split('T')[0],
+      date: `${data.date.getDate().toString().padStart(2, '0')}-${(data.date.getMonth() + 1).toString().padStart(2, '0')}-${data.date.getFullYear()}`,
       hours: data.hours,
       nptType: data.nbtType,
       wellName: this.extractWellName(data.description),

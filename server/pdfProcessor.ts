@@ -119,7 +119,7 @@ async function extractBillingDataFromPDF(buffer: Buffer): Promise<BillingSheetRo
       extractedFailure: undefined,
       nptReportData: {
         rigId: '203',
-        date: '2025-05-22',
+        date: '22-05-2025',
         hours: 3,
         nptType: 'Contractual',
         contractualProcess: 'Cont. POOH 12.25" Baker PDC bit packed BHA on 5" DP stands from 1069 m to surface. Perform RAY CBL-VDL-GR-CCL WL logging.',
@@ -142,7 +142,7 @@ async function extractBillingDataFromPDF(buffer: Buffer): Promise<BillingSheetRo
       extractedFailure: undefined,
       nptReportData: {
         rigId: '203',
-        date: '2025-05-11',
+        date: '11-05-2025',
         hours: 18,
         nptType: 'Contractual',
         contractualProcess: 'Rig Move',
@@ -164,7 +164,7 @@ async function extractBillingDataFromPDF(buffer: Buffer): Promise<BillingSheetRo
       extractedFailure: undefined,
       nptReportData: {
         rigId: '203',
-        date: '2025-05-12',
+        date: '12-05-2025',
         hours: 24,
         nptType: 'Contractual',
         contractualProcess: 'Rig Move',
@@ -186,7 +186,7 @@ async function extractBillingDataFromPDF(buffer: Buffer): Promise<BillingSheetRo
       extractedFailure: undefined,
       nptReportData: {
         rigId: '203',
-        date: '2025-05-13',
+        date: '13-05-2025',
         hours: 24,
         nptType: 'Contractual',
         contractualProcess: 'Rig Move',
@@ -208,7 +208,7 @@ async function extractBillingDataFromPDF(buffer: Buffer): Promise<BillingSheetRo
       extractedFailure: undefined,
       nptReportData: {
         rigId: '203',
-        date: '2025-05-14',
+        date: '14-05-2025',
         hours: 24,
         nptType: 'Contractual',
         contractualProcess: 'Rig Move',
@@ -230,7 +230,7 @@ async function extractBillingDataFromPDF(buffer: Buffer): Promise<BillingSheetRo
       extractedFailure: undefined,
       nptReportData: {
         rigId: '203',
-        date: '2025-05-15',
+        date: '15-05-2025',
         hours: 10,
         nptType: 'Contractual',
         contractualProcess: 'Rig Move',
@@ -409,7 +409,7 @@ function convertToBillingRow(parsed: ParsedBillingRow, metadata: any): BillingSh
   // Create NPT report data
   const nptReportData = contractualCategory ? {
     rigId: metadata.rigNumber || '',
-    date: parsedDate.toISOString().split('T')[0],
+    date: `${parsedDate.getDate().toString().padStart(2, '0')}-${(parsedDate.getMonth() + 1).toString().padStart(2, '0')}-${parsedDate.getFullYear()}`,
     hours: parsed.totalHours,
     nptType: 'Contractual' as const,
     contractualProcess: parsed.description, // Full description goes to contractual column

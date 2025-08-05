@@ -362,7 +362,7 @@ export default function ReportsPage() {
                       const system = systems.find(s => s.name === report.system);
                       return (
                         <TableRow key={report.id}>
-                          <TableCell>{new Date(report.date).toLocaleDateString()}</TableCell>
+                          <TableCell>{new Date(report.date).toLocaleDateString('en-GB').replace(/\//g, '-')}</TableCell>
                           <TableCell>Rig {rig?.rigNumber}</TableCell>
                           <TableCell>{report.nptType}</TableCell>
                           <TableCell>{report.hours}</TableCell>
