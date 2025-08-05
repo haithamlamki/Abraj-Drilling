@@ -457,6 +457,156 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Rig routes
+  app.get('/api/rigs', async (req, res) => {
+    try {
+      const rigs = await storage.getRigs();
+      res.json(rigs);
+    } catch (error) {
+      console.error("Error fetching rigs:", error);
+      res.status(500).json({ message: "Failed to fetch rigs" });
+    }
+  });
+
+  app.post('/api/rigs', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Only admins can create rigs" });
+      }
+      
+      const validatedData = insertRigSchema.parse(req.body);
+      const rig = await storage.createRig(validatedData);
+      res.status(201).json(rig);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Validation failed", errors: error.errors });
+      }
+      console.error("Error creating rig:", error);
+      res.status(500).json({ message: "Failed to create rig" });
+    }
+  });
+
+  app.put('/api/rigs/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Only admins can update rigs" });
+      }
+      
+      const rigId = parseInt(req.params.id);
+      const validatedData = insertRigSchema.partial().parse(req.body);
+      const rig = await storage.updateRig(rigId, validatedData);
+      res.json(rig);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Validation failed", errors: error.errors });
+      }
+      console.error("Error updating rig:", error);
+      res.status(500).json({ message: "Failed to update rig" });
+    }
+  });
+
+  app.delete('/api/rigs/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Only admins can delete rigs" });
+      }
+      
+      const rigId = parseInt(req.params.id);
+      await storage.deleteRig(rigId);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting rig:", error);
+      res.status(500).json({ message: "Failed to delete rig" });
+    }
+  });
+
+  // POST /api/rigs/import - Import rigs from Excel file
+  app.post("/api/rigs/import", isAuthenticated, upload.single('file'), async (req: any, res) => {
+    if (req.user?.claims?.sub) {
+      const user = await storage.getUser(req.user.claims.sub);
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Only admins can import rigs" });
+      }
+    }
+
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: "No file uploaded" });
+      }
+
+      const fileName = req.file.originalname;
+      const fileExtension = fileName.toLowerCase().split('.').pop();
+
+      if (!['xlsx', 'xls'].includes(fileExtension || '')) {
+        return res.status(400).json({ message: "Only Excel files (.xlsx, .xls) are supported" });
+      }
+
+      // Parse Excel file
+      const xlsx = require('xlsx');
+      const workbook = xlsx.read(req.file.buffer, { type: 'buffer' });
+      const firstSheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[firstSheetName];
+      const data = xlsx.utils.sheet_to_json(worksheet);
+
+      let imported = 0;
+      const errors: string[] = [];
+
+      // Process each row
+      for (const row of data) {
+        try {
+          // Map the Excel columns to our rig data structure
+          const rigData = {
+            rigNumber: String(row['Rig Number'] || row['RigNumber'] || row['Rig'] || '').trim(),
+            section: String(row['Section'] || row['Unit'] || 'KOC').trim(),
+            client: String(row['Client'] || row['Company'] || 'Kuwait Oil Company').trim(),
+            location: String(row['Location'] || row['Field'] || '').trim(),
+            isActive: row['Status'] ? String(row['Status']).toLowerCase() === 'active' : true
+          };
+
+          // Validate required fields
+          if (!rigData.rigNumber) {
+            errors.push(`Row ${imported + 1}: Missing rig number`);
+            continue;
+          }
+
+          // Check if rig already exists
+          const existingRig = await storage.getRigByNumber(parseInt(rigData.rigNumber));
+          if (existingRig) {
+            // Update existing rig
+            await storage.updateRig(existingRig.id, rigData);
+          } else {
+            // Create new rig
+            await storage.createRig(rigData);
+          }
+          
+          imported++;
+        } catch (error) {
+          errors.push(`Row ${imported + 1}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+      }
+
+      res.json({
+        message: `Import completed: ${imported} rigs processed`,
+        imported,
+        total: data.length,
+        errors: errors.length > 0 ? errors : undefined
+      });
+
+    } catch (error) {
+      console.error("Error importing rigs:", error);
+      res.status(500).json({ message: "Failed to import rigs" });
+    }
+  });
+
   // Billing upload routes
   app.post('/api/billing-upload', isAuthenticated, upload.single('file'), async (req: any, res) => {
     try {

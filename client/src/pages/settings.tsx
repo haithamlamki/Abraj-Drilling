@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Settings, Plus, Trash2, Users, Database, Cog, UserPlus, Edit, Shield } from "lucide-react";
+import { Settings, Plus, Trash2, Users, Database, Cog, UserPlus, Edit, Shield, Upload } from "lucide-react";
 import type { System, Equipment, Department, ActionParty, Rig, User } from "@shared/schema";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
@@ -32,6 +32,9 @@ export default function SettingsPage() {
     rigId: null as number | null,
   });
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
+  const [showRigDialog, setShowRigDialog] = useState(false);
+  const [editingRig, setEditingRig] = useState<Rig | null>(null);
+  const [showRigImportDialog, setShowRigImportDialog] = useState(false);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -180,6 +183,69 @@ export default function SettingsPage() {
         rigId: null,
       });
       toast({ title: "Success", description: "User created successfully" });
+    },
+  });
+
+  const createRigMutation = useMutation({
+    mutationFn: async (rigData: { rigNumber: string; section: string; client: string; location: string; isActive: boolean }) => 
+      apiRequest('/api/rigs', {
+        method: 'POST',
+        body: JSON.stringify(rigData),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/rigs'] });
+      setShowRigDialog(false);
+      setEditingRig(null);
+      toast({ title: "Success", description: "Rig created successfully" });
+    },
+  });
+
+  const updateRigMutation = useMutation({
+    mutationFn: async ({ id, updates }: { id: number; updates: any }) => 
+      apiRequest(`/api/rigs/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(updates),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/rigs'] });
+      setShowRigDialog(false);
+      setEditingRig(null);
+      toast({ title: "Success", description: "Rig updated successfully" });
+    },
+  });
+
+  const importRigsMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      const response = await fetch('/api/rigs/import', {
+        method: 'POST',
+        body: formData,
+        credentials: 'include',
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to import rigs');
+      }
+      
+      return response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/rigs'] });
+      setShowRigImportDialog(false);
+      toast({ 
+        title: "Success", 
+        description: `Successfully imported ${data.imported} rigs` 
+      });
+    },
+    onError: (error: Error) => {
+      toast({ 
+        title: "Error", 
+        description: error.message,
+        variant: "destructive"
+      });
     },
   });
 
@@ -692,7 +758,26 @@ export default function SettingsPage() {
               <TabsContent value="rigs">
                 <Card>
                   <CardHeader>
-                    <CardTitle>Rigs Information</CardTitle>
+                    <div className="flex justify-between items-center">
+                      <CardTitle>Rigs Information</CardTitle>
+                      <div className="flex gap-2">
+                        <Button 
+                          variant="outline"
+                          onClick={() => setShowRigImportDialog(true)}
+                          data-testid="button-import-rigs"
+                        >
+                          <Upload className="h-4 w-4 mr-2" />
+                          Import from Excel
+                        </Button>
+                        <Button 
+                          onClick={() => setShowRigDialog(true)}
+                          data-testid="button-create-rig"
+                        >
+                          <Plus className="h-4 w-4 mr-2" />
+                          Create Rig
+                        </Button>
+                      </div>
+                    </div>
                   </CardHeader>
                   <CardContent>
                     <Table>
@@ -703,6 +788,7 @@ export default function SettingsPage() {
                           <TableHead>Client</TableHead>
                           <TableHead>Location</TableHead>
                           <TableHead>Status</TableHead>
+                          <TableHead>Actions</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -717,6 +803,19 @@ export default function SettingsPage() {
                                 {rig.isActive ? "Active" : "Inactive"}
                               </Badge>
                             </TableCell>
+                            <TableCell>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setEditingRig(rig);
+                                  setShowRigDialog(true);
+                                }}
+                                data-testid={`button-edit-rig-${rig.id}`}
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                            </TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
@@ -728,6 +827,148 @@ export default function SettingsPage() {
           </div>
         </div>
       </div>
+      
+      {/* Rig Dialog for Create/Edit */}
+      <Dialog open={showRigDialog} onOpenChange={setShowRigDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingRig ? 'Edit Rig' : 'Create New Rig'}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={(e) => {
+            e.preventDefault();
+            const formData = new FormData(e.currentTarget);
+            const rigData = {
+              rigNumber: formData.get('rigNumber') as string,
+              section: formData.get('section') as string,
+              client: formData.get('client') as string,
+              location: formData.get('location') as string,
+              isActive: formData.get('isActive') === 'true',
+            };
+            
+            if (editingRig) {
+              updateRigMutation.mutate({ id: editingRig.id, updates: rigData });
+            } else {
+              createRigMutation.mutate(rigData);
+            }
+          }}>
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="rigNumber">Rig Number</Label>
+                <Input
+                  id="rigNumber"
+                  name="rigNumber"
+                  defaultValue={editingRig?.rigNumber || ''}
+                  placeholder="e.g., 203"
+                  required
+                  data-testid="input-rig-number-dialog"
+                />
+              </div>
+              <div>
+                <Label htmlFor="section">Section</Label>
+                <Select name="section" defaultValue={editingRig?.section || 'KOC'}>
+                  <SelectTrigger data-testid="select-section">
+                    <SelectValue placeholder="Select section" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="KOC">KOC</SelectItem>
+                    <SelectItem value="KJO">KJO</SelectItem>
+                    <SelectItem value="Other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="client">Client</Label>
+                <Input
+                  id="client"
+                  name="client"
+                  defaultValue={editingRig?.client || ''}
+                  placeholder="e.g., Kuwait Oil Company"
+                  required
+                  data-testid="input-client"
+                />
+              </div>
+              <div>
+                <Label htmlFor="location">Location</Label>
+                <Input
+                  id="location"
+                  name="location"
+                  defaultValue={editingRig?.location || ''}
+                  placeholder="e.g., Burgan Field"
+                  required
+                  data-testid="input-location"
+                />
+              </div>
+              <div>
+                <Label htmlFor="isActive">Status</Label>
+                <Select name="isActive" defaultValue={editingRig?.isActive?.toString() || 'true'}>
+                  <SelectTrigger data-testid="select-status">
+                    <SelectValue placeholder="Select status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="true">Active</SelectItem>
+                    <SelectItem value="false">Inactive</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="flex justify-end space-x-2 mt-4">
+              <Button type="button" variant="outline" onClick={() => {
+                setShowRigDialog(false);
+                setEditingRig(null);
+              }}>
+                Cancel
+              </Button>
+              <Button 
+                type="submit" 
+                disabled={createRigMutation.isPending || updateRigMutation.isPending}
+                data-testid="button-save-rig"
+              >
+                {editingRig ? 'Update' : 'Create'}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Rig Import Dialog */}
+      <Dialog open={showRigImportDialog} onOpenChange={setShowRigImportDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Import Rigs from Excel</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-gray-600">
+              Upload an Excel file containing rig information. The file should have columns for:
+              Rig Number, Section, Client, Location, and Status (Active/Inactive).
+            </p>
+            <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+              <input
+                type="file"
+                accept=".xlsx,.xls"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    importRigsMutation.mutate(file);
+                  }
+                }}
+                className="hidden"
+                id="rig-file-upload"
+              />
+              <label
+                htmlFor="rig-file-upload"
+                className="cursor-pointer flex flex-col items-center"
+              >
+                <Upload className="h-8 w-8 mb-2 text-gray-400" />
+                <span className="text-sm font-medium">Click to upload Excel file</span>
+                <span className="text-xs text-gray-500 mt-1">.xlsx or .xls files only</span>
+              </label>
+            </div>
+            {importRigsMutation.isPending && (
+              <p className="text-sm text-center text-gray-600">Processing file...</p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

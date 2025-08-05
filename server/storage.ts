@@ -37,6 +37,8 @@ export interface IStorage {
   getRigs(): Promise<Rig[]>;
   getRig(id: number): Promise<Rig | undefined>;
   createRig(rig: InsertRig): Promise<Rig>;
+  updateRig(id: number, rig: Partial<InsertRig>): Promise<Rig>;
+  deleteRig(id: number): Promise<void>;
   
   // NPT Report operations
   getNptReports(filters?: { rigId?: number; userId?: string; status?: string }): Promise<NptReport[]>;
@@ -129,6 +131,16 @@ export class DatabaseStorage implements IStorage {
   async createRig(rig: InsertRig): Promise<Rig> {
     const [newRig] = await db.insert(rigs).values(rig).returning();
     return newRig;
+  }
+
+  async updateRig(id: number, rig: Partial<InsertRig>): Promise<Rig> {
+    const [updatedRig] = await db.update(rigs).set(rig).where(eq(rigs.id, id)).returning();
+    if (!updatedRig) throw new Error('Rig not found');
+    return updatedRig;
+  }
+
+  async deleteRig(id: number): Promise<void> {
+    await db.delete(rigs).where(eq(rigs.id, id));
   }
   
   // NPT Report operations
