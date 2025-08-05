@@ -163,7 +163,7 @@ export default function FileUpload() {
       const firstRow = currentResult.extractedData[0];
       sessionStorage.setItem('billingData', JSON.stringify(firstRow));
       sessionStorage.setItem('allBillingData', JSON.stringify(currentResult.extractedData));
-      setLocation('/npt-reports/new');
+      setLocation('/npt-reports');
     }
   };
 
