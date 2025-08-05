@@ -52,6 +52,16 @@ export default function NptForm() {
   const queryClient = useQueryClient();
   const [selectedNptType, setSelectedNptType] = useState<string>("");
   const [billingData, setBillingData] = useState<BillingSheetRow | null>(null);
+  
+  // Get edit parameter from URL
+  const urlParams = new URLSearchParams(window.location.search);
+  const editId = urlParams.get('edit');
+  
+  // Fetch existing report data if editing
+  const { data: existingReport } = useQuery({
+    queryKey: ['/api/npt-reports', editId],
+    enabled: !!editId,
+  });
 
   // Check for billing data in sessionStorage
   useEffect(() => {
@@ -68,8 +78,34 @@ export default function NptForm() {
     }
   }, []);
 
-  // Initialize form with billing data if available
+  // Initialize form with billing data or existing report data
   const getDefaultValues = () => {
+    // If editing an existing report, use its data
+    if (existingReport) {
+      return {
+        rigId: existingReport.rigId,
+        userId: existingReport.userId,
+        date: existingReport.date ? new Date(existingReport.date).toISOString().split('T')[0] : "",
+        hours: existingReport.hours || 0,
+        nptType: existingReport.nptType || "",
+        system: existingReport.system || "",
+        parentEquipment: existingReport.parentEquipment || "",
+        partEquipment: existingReport.partEquipment || "",
+        contractualProcess: existingReport.contractualProcess || "",
+        department: existingReport.department || "",
+        immediateCause: existingReport.immediateCause || "",
+        rootCause: existingReport.rootCause || "",
+        correctiveAction: existingReport.correctiveAction || "",
+        futureAction: existingReport.futureAction || "",
+        actionParty: existingReport.actionParty || "",
+        notificationNumber: existingReport.notificationNumber || "",
+        investigationReport: existingReport.investigationReport || "",
+        wellName: existingReport.wellName || "",
+        status: existingReport.status || "Draft",
+      };
+    }
+    
+    // Otherwise, use default values with billing data if available
     const baseValues = {
       rigId: user?.rigId || (billingData?.rigNumber ? parseInt(billingData.rigNumber) : 0),
       userId: user?.id || "",
@@ -130,6 +166,17 @@ export default function NptForm() {
       setSelectedNptType(billingData.nbtType || "");
     }
   }, [billingData]);
+  
+  // Update form when existing report data is loaded
+  useEffect(() => {
+    if (existingReport) {
+      const values = getDefaultValues();
+      Object.keys(values).forEach((key) => {
+        form.setValue(key as any, values[key as keyof typeof values]);
+      });
+      setSelectedNptType(existingReport.nptType || "");
+    }
+  }, [existingReport]);
 
   // Fetch reference data
   const { data: systems = [] } = useQuery<System[]>({
@@ -150,20 +197,31 @@ export default function NptForm() {
 
   const createReportMutation = useMutation({
     mutationFn: async (data: FormData) => {
-      await apiRequest('POST', '/api/npt-reports', {
-        ...data,
-        date: new Date(data.date).toISOString(),
-      });
+      if (editId) {
+        // Update existing report
+        await apiRequest('PUT', `/api/npt-reports/${editId}`, {
+          ...data,
+          date: new Date(data.date).toISOString(),
+        });
+      } else {
+        // Create new report
+        await apiRequest('POST', '/api/npt-reports', {
+          ...data,
+          date: new Date(data.date).toISOString(),
+        });
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/npt-reports'] });
       queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
       toast({
         title: "Success",
-        description: "NPT report created successfully",
+        description: editId ? "NPT report updated successfully" : "NPT report created successfully",
       });
-      form.reset();
-      setSelectedNptType("");
+      if (!editId) {
+        form.reset();
+        setSelectedNptType("");
+      }
     },
     onError: (error) => {
       if (isUnauthorizedError(error)) {
@@ -192,21 +250,33 @@ export default function NptForm() {
 
   const submitForReviewMutation = useMutation({
     mutationFn: async (data: FormData) => {
-      await apiRequest('POST', '/api/npt-reports', {
-        ...data,
-        date: new Date(data.date).toISOString(),
-        status: "Pending Review",
-      });
+      if (editId) {
+        // Update existing report
+        await apiRequest('PUT', `/api/npt-reports/${editId}`, {
+          ...data,
+          date: new Date(data.date).toISOString(),
+          status: "Pending Review",
+        });
+      } else {
+        // Create new report
+        await apiRequest('POST', '/api/npt-reports', {
+          ...data,
+          date: new Date(data.date).toISOString(),
+          status: "Pending Review",
+        });
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/npt-reports'] });
       queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
       toast({
         title: "Success",
-        description: "NPT report submitted for review",
+        description: editId ? "NPT report updated and submitted for review" : "NPT report submitted for review",
       });
-      form.reset();
-      setSelectedNptType("");
+      if (!editId) {
+        form.reset();
+        setSelectedNptType("");
+      }
     },
     onError: (error) => {
       if (isUnauthorizedError(error)) {

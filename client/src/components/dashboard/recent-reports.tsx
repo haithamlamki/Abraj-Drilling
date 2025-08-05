@@ -103,6 +103,7 @@ export default function RecentReports() {
                       <Button 
                         variant="link" 
                         className="text-primary hover:text-primary/80 p-0 h-auto"
+                        onClick={() => setLocation(`/npt-reports?edit=${report.id}`)}
                         data-testid={`button-view-report-${report.id}`}
                       >
                         {['Approved', 'Rejected'].includes(report.status!) ? 'View' : 'Edit'}
