@@ -107,11 +107,35 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
       
       // Convert to billing sheet row format for API
       const billingRows = activeRows.map(row => ({
-        ...row,
-        nbtType: row.nptType,
+        rigNumber: row.rigNumber,
         date: new Date(row.date),
+        year: row.year,
+        month: row.month,
+        hours: parseFloat(row.hours.toString()),
+        nbtType: row.nptType,
         description: row.contractualProcess || row.immediateCause || '',
-        status: isSubmittingForReview ? 'Pending' : 'Draft',
+        nptReportData: {
+          rigId: row.rigNumber,
+          date: row.date,
+          year: row.year,
+          month: row.month,
+          hours: parseFloat(row.hours.toString()),
+          nptType: row.nptType,
+          system: row.system || null,
+          parentEquipment: row.equipment || null,
+          partEquipment: row.partEquipment || null,
+          contractualProcess: row.contractualProcess || null,
+          immediateCause: row.immediateCause || null,
+          rootCause: row.rootCause || null,
+          correctiveAction: row.correctiveAction || null,
+          futureAction: row.futureAction || null,
+          department: row.department || null,
+          actionParty: row.actionParty || null,
+          wellName: row.wellName || null,
+          notificationNumber: row.notificationNumber || null,
+          investigationWellName: row.investigationWellName || null,
+          status: isSubmittingForReview ? 'Pending' : 'Draft',
+        }
       }));
 
       const response = await apiRequest('POST', '/api/npt-reports/from-billing', { rows: billingRows });
@@ -140,6 +164,7 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
   });
 
   const handleSubmit = (data: FormData, submitForReview: boolean = false) => {
+    console.log('handleSubmit called with:', { data, submitForReview });
     setIsSubmittingForReview(submitForReview);
     createReportsMutation.mutate(data);
   };
