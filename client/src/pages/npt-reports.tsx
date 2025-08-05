@@ -3,7 +3,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import Navigation from "@/components/layout/navigation";
 import Sidebar from "@/components/layout/sidebar";
-import NptForm from "@/components/npt/npt-form";
+import NptFormMulti from "@/components/npt/npt-form-multi";
 import { Button } from "@/components/ui/button";
 
 export default function NptReports() {
@@ -46,7 +46,7 @@ export default function NptReports() {
               </Button>
             </div>
 
-            <NptForm />
+            <NptFormMulti />
           </div>
         </div>
       </div>
