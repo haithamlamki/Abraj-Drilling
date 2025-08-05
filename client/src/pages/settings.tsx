@@ -38,9 +38,27 @@ export default function SettingsPage() {
   const [showRigImportDialog, setShowRigImportDialog] = useState(false);
   
   // Inline editing states
-  const [editingItemId, setEditingItemId] = useState<number | null>(null);
+  const [editingItemId, setEditingItemId] = useState<number | string | null>(null);
   const [editingItemName, setEditingItemName] = useState("");
-  const [editingType, setEditingType] = useState<"system" | "equipment" | "department" | "actionParty" | null>(null);
+  const [editingType, setEditingType] = useState<"system" | "equipment" | "department" | "actionParty" | "user" | "rig" | null>(null);
+  const [editingUserData, setEditingUserData] = useState<{
+    email: string;
+    firstName: string;
+    lastName: string;
+    role: string;
+    rigId: number | null;
+  } | null>(null);
+  const [editingRigData, setEditingRigData] = useState<{
+    rigNumber: number;
+    section: string;
+    client: string;
+    location: string;
+  } | null>(null);
+  
+  // Custom roles
+  const [customRoles, setCustomRoles] = useState<string[]>([]);
+  const [showAddRoleDialog, setShowAddRoleDialog] = useState(false);
+  const [newRoleName, setNewRoleName] = useState("");
   
   // Admin customization states
   const [customSettings, setCustomSettings] = useState({
@@ -238,7 +256,35 @@ export default function SettingsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/users'] });
+      setEditingItemId(null);
+      setEditingType(null);
+      setEditingUserData(null);
       toast({ title: "Success", description: "User updated successfully" });
+    },
+  });
+  
+  const updateRigMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const response = await apiRequest('PATCH', `/api/rigs/${data.id}`, data);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/rigs'] });
+      setEditingItemId(null);
+      setEditingType(null);
+      setEditingRigData(null);
+      toast({ title: "Success", description: "Rig updated successfully" });
+    },
+  });
+  
+  const deleteRigMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const response = await apiRequest('DELETE', `/api/rigs/${id}`);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/rigs'] });
+      toast({ title: "Success", description: "Rig deleted successfully" });
     },
   });
 
@@ -285,18 +331,7 @@ export default function SettingsPage() {
     },
   });
 
-  const updateRigMutation = useMutation({
-    mutationFn: async ({ id, updates }: { id: number; updates: any }) => {
-      const response = await apiRequest('PATCH', `/api/rigs/${id}`, updates);
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/rigs'] });
-      setShowRigDialog(false);
-      setEditingRig(null);
-      toast({ title: "Success", description: "Rig updated successfully" });
-    },
-  });
+
 
   const importRigsMutation = useMutation({
     mutationFn: async (file: File) => {
@@ -989,46 +1024,151 @@ export default function SettingsPage() {
                       <TableBody>
                         {users.map((currentUserData) => {
                           const assignedRig = currentUserData.rigId ? rigs.find(r => r.id === currentUserData.rigId) : null;
+                          const isEditing = editingItemId === currentUserData.id && editingType === "user";
+                          
                           return (
                             <TableRow key={currentUserData.id}>
                               <TableCell className="font-medium">
-                                {currentUserData.firstName} {currentUserData.lastName}
+                                {isEditing ? (
+                                  <div className="flex gap-2">
+                                    <Input
+                                      value={editingUserData?.firstName || ""}
+                                      onChange={(e) => setEditingUserData({...editingUserData!, firstName: e.target.value})}
+                                      placeholder="First name"
+                                      className="h-8 w-24"
+                                    />
+                                    <Input
+                                      value={editingUserData?.lastName || ""}
+                                      onChange={(e) => setEditingUserData({...editingUserData!, lastName: e.target.value})}
+                                      placeholder="Last name"
+                                      className="h-8 w-24"
+                                    />
+                                  </div>
+                                ) : (
+                                  <div 
+                                    className="cursor-pointer hover:underline flex items-center gap-2"
+                                    onClick={() => {
+                                      setEditingItemId(currentUserData.id);
+                                      setEditingType("user");
+                                      setEditingUserData({
+                                        email: currentUserData.email || "",
+                                        firstName: currentUserData.firstName || "",
+                                        lastName: currentUserData.lastName || "",
+                                        role: currentUserData.role,
+                                        rigId: currentUserData.rigId
+                                      });
+                                    }}
+                                  >
+                                    {currentUserData.firstName} {currentUserData.lastName}
+                                    <Edit className="h-3 w-3 opacity-50" />
+                                  </div>
+                                )}
                               </TableCell>
-                              <TableCell>{currentUserData.email}</TableCell>
                               <TableCell>
-                                <Badge variant={currentUserData.role === 'admin' ? 'destructive' : 'default'}>
-                                  <Shield className="h-3 w-3 mr-1" />
-                                  {currentUserData.role}
-                                </Badge>
+                                {isEditing ? (
+                                  <Input
+                                    type="email"
+                                    value={editingUserData?.email || ""}
+                                    onChange={(e) => setEditingUserData({...editingUserData!, email: e.target.value})}
+                                    className="h-8 w-48"
+                                  />
+                                ) : (
+                                  currentUserData.email
+                                )}
                               </TableCell>
                               <TableCell>
-                                {assignedRig ? `Rig ${assignedRig.rigNumber}` : '-'}
+                                {isEditing ? (
+                                  <Select
+                                    value={editingUserData?.role}
+                                    onValueChange={(value) => setEditingUserData({...editingUserData!, role: value})}
+                                  >
+                                    <SelectTrigger className="h-8 w-36">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="admin">Admin</SelectItem>
+                                      <SelectItem value="supervisor">Supervisor</SelectItem>
+                                      <SelectItem value="drilling_manager">Drilling Manager</SelectItem>
+                                      {customRoles.map((role) => (
+                                        <SelectItem key={role} value={role}>{role}</SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                ) : (
+                                  <Badge variant={currentUserData.role === 'admin' ? 'destructive' : 'default'}>
+                                    <Shield className="h-3 w-3 mr-1" />
+                                    {currentUserData.role}
+                                  </Badge>
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                {isEditing ? (
+                                  <Select
+                                    value={editingUserData?.rigId?.toString() || "none"}
+                                    onValueChange={(value) => setEditingUserData({...editingUserData!, rigId: value === "none" ? null : parseInt(value)})}
+                                  >
+                                    <SelectTrigger className="h-8 w-32">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="none">No Rig</SelectItem>
+                                      {rigs.map((rig) => (
+                                        <SelectItem key={rig.id} value={rig.id.toString()}>
+                                          Rig {rig.rigNumber}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                ) : (
+                                  assignedRig ? `Rig ${assignedRig.rigNumber}` : '-'
+                                )}
                               </TableCell>
                               <TableCell>
                                 <Badge variant="default">Active</Badge>
                               </TableCell>
                               <TableCell>
-                                <div className="flex gap-1">
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => setEditingUserId(currentUserData.id)}
-                                    data-testid={`button-edit-user-${currentUserData.id}`}
-                                  >
-                                    <Edit className="h-4 w-4" />
-                                  </Button>
-                                  {currentUserData.id !== user?.id && (
+                                {isEditing ? (
+                                  <div className="flex gap-1">
                                     <Button
-                                      variant="destructive"
                                       size="sm"
-                                      onClick={() => deleteUserMutation.mutate(currentUserData.id)}
-                                      disabled={deleteUserMutation.isPending}
-                                      data-testid={`button-delete-user-${currentUserData.id}`}
+                                      variant="ghost"
+                                      onClick={() => {
+                                        updateUserMutation.mutate({
+                                          id: currentUserData.id,
+                                          updates: editingUserData
+                                        });
+                                      }}
+                                      disabled={updateUserMutation.isPending}
                                     >
-                                      <Trash2 className="h-4 w-4" />
+                                      <Check className="h-4 w-4" />
                                     </Button>
-                                  )}
-                                </div>
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={() => {
+                                        setEditingItemId(null);
+                                        setEditingType(null);
+                                        setEditingUserData(null);
+                                      }}
+                                    >
+                                      <X className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  <div className="flex gap-1">
+                                    {currentUserData.id !== user?.id && (
+                                      <Button
+                                        variant="destructive"
+                                        size="sm"
+                                        onClick={() => deleteUserMutation.mutate(currentUserData.id)}
+                                        disabled={deleteUserMutation.isPending}
+                                        data-testid={`button-delete-user-${currentUserData.id}`}
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                    )}
+                                  </div>
+                                )}
                               </TableCell>
                             </TableRow>
                           );
@@ -1076,32 +1216,127 @@ export default function SettingsPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {rigs.map((rig) => (
-                          <TableRow key={rig.id}>
-                            <TableCell className="font-medium">{rig.rigNumber}</TableCell>
-                            <TableCell className="capitalize">{rig.section}</TableCell>
-                            <TableCell>{rig.client}</TableCell>
-                            <TableCell>{rig.location}</TableCell>
-                            <TableCell>
-                              <Badge variant={rig.isActive ? "default" : "secondary"}>
-                                {rig.isActive ? "Active" : "Inactive"}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
-                                  setEditingRig(rig);
-                                  setShowRigDialog(true);
-                                }}
-                                data-testid={`button-edit-rig-${rig.id}`}
-                              >
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        ))}
+                        {rigs.map((rig) => {
+                          const isEditing = editingItemId === rig.id && editingType === "rig";
+                          
+                          return (
+                            <TableRow key={rig.id}>
+                              <TableCell className="font-medium">
+                                {isEditing ? (
+                                  <Input
+                                    type="number"
+                                    value={editingRigData?.rigNumber || 0}
+                                    onChange={(e) => setEditingRigData({...editingRigData!, rigNumber: parseInt(e.target.value)})}
+                                    className="h-8 w-20"
+                                  />
+                                ) : (
+                                  <div 
+                                    className="cursor-pointer hover:underline flex items-center gap-2"
+                                    onClick={() => {
+                                      setEditingItemId(rig.id);
+                                      setEditingType("rig");
+                                      setEditingRigData({
+                                        rigNumber: rig.rigNumber,
+                                        section: rig.section,
+                                        client: rig.client,
+                                        location: rig.location
+                                      });
+                                    }}
+                                  >
+                                    {rig.rigNumber}
+                                    <Edit className="h-3 w-3 opacity-50" />
+                                  </div>
+                                )}
+                              </TableCell>
+                              <TableCell className="capitalize">
+                                {isEditing ? (
+                                  <Select
+                                    value={editingRigData?.section}
+                                    onValueChange={(value) => setEditingRigData({...editingRigData!, section: value})}
+                                  >
+                                    <SelectTrigger className="h-8 w-32">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="drilling">Drilling</SelectItem>
+                                      <SelectItem value="workover">Workover</SelectItem>
+                                      <SelectItem value="maintenance">Maintenance</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                ) : (
+                                  rig.section
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                {isEditing ? (
+                                  <Input
+                                    value={editingRigData?.client || ""}
+                                    onChange={(e) => setEditingRigData({...editingRigData!, client: e.target.value})}
+                                    className="h-8 w-32"
+                                  />
+                                ) : (
+                                  rig.client
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                {isEditing ? (
+                                  <Input
+                                    value={editingRigData?.location || ""}
+                                    onChange={(e) => setEditingRigData({...editingRigData!, location: e.target.value})}
+                                    className="h-8 w-32"
+                                  />
+                                ) : (
+                                  rig.location
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant={rig.isActive ? "default" : "secondary"}>
+                                  {rig.isActive ? "Active" : "Inactive"}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                {isEditing ? (
+                                  <div className="flex gap-1">
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={() => {
+                                        updateRigMutation.mutate({
+                                          id: rig.id,
+                                          ...editingRigData
+                                        });
+                                      }}
+                                      disabled={updateRigMutation.isPending}
+                                    >
+                                      <Check className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={() => {
+                                        setEditingItemId(null);
+                                        setEditingType(null);
+                                        setEditingRigData(null);
+                                      }}
+                                    >
+                                      <X className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  <Button
+                                    variant="destructive"
+                                    size="sm"
+                                    onClick={() => deleteRigMutation.mutate(rig.id)}
+                                    disabled={deleteRigMutation.isPending}
+                                    data-testid={`button-delete-rig-${rig.id}`}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
                       </TableBody>
                     </Table>
                   </CardContent>
@@ -1110,6 +1345,67 @@ export default function SettingsPage() {
               
               <TabsContent value="customization">
                 <div className="space-y-6">
+                  {/* Custom Roles */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Shield className="h-5 w-5" />
+                        Custom Roles
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="flex items-center gap-2">
+                        <Input
+                          placeholder="Enter new role name"
+                          value={newRoleName}
+                          onChange={(e) => setNewRoleName(e.target.value)}
+                          onKeyPress={(e) => {
+                            if (e.key === 'Enter' && newRoleName.trim()) {
+                              setCustomRoles([...customRoles, newRoleName.trim()]);
+                              setNewRoleName("");
+                              toast({ title: "Success", description: `Custom role "${newRoleName}" added successfully` });
+                            }
+                          }}
+                          className="flex-1"
+                        />
+                        <Button
+                          onClick={() => {
+                            if (newRoleName.trim()) {
+                              setCustomRoles([...customRoles, newRoleName.trim()]);
+                              setNewRoleName("");
+                              toast({ title: "Success", description: `Custom role "${newRoleName}" added successfully` });
+                            }
+                          }}
+                          disabled={!newRoleName.trim()}
+                        >
+                          <Plus className="h-4 w-4 mr-2" />
+                          Add Role
+                        </Button>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {customRoles.map((role, index) => (
+                          <Badge key={index} variant="secondary" className="px-3 py-1">
+                            {role}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="ml-2 h-4 w-4 p-0"
+                              onClick={() => {
+                                setCustomRoles(customRoles.filter((_, i) => i !== index));
+                                toast({ title: "Success", description: `Custom role "${role}" removed` });
+                              }}
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </Badge>
+                        ))}
+                        {customRoles.length === 0 && (
+                          <p className="text-sm text-muted-foreground">No custom roles created yet</p>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                  
                   {/* General Settings */}
                   <Card>
                     <CardHeader>
