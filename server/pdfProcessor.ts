@@ -166,13 +166,18 @@ async function extractBillingDataFromPDF(buffer: Buffer): Promise<BillingSheetRo
         {
           role: 'system',
           content: `You are an expert at extracting billing data from oil & gas drilling PDFs. 
-Extract each billing row with the following information:
+Extract EVERY billing row with the following information:
 - Date (in YYYY-MM-DD format)
-- Hours
+- Hours (including fractional hours like 0.5, 1.25, etc.)
 - Rate Type (exact column name from the PDF)
 - Description of work performed
 - NBT Type (Contractual or Abraj)
 - System category for Contractual NBT (from this list: ${CONTRACTUAL_CATEGORIES.join(', ')})
+
+IMPORTANT: Include ALL entries, even those with:
+- Small durations (0.5 hours, 0.25 hours, etc.)
+- Multiple entries on the same date
+- Entries that may appear in compact or condensed format
 
 Important NBT classification rules:
 1. The following rate types are ALL classified as "Abraj" NBT:
@@ -187,6 +192,8 @@ Important NBT classification rules:
 2. "Contractual" NBT includes: RIG MOVE, LOGGING, SERVICE, etc.
 3. Operating Rate is productive time - do not include these rows
 4. Extract the ticket number if present (format: DR + numbers)
+
+Carefully scan the entire PDF for ALL non-productive time entries. Look for columns that show hours with rate types.
 
 Return the data as a JSON object with a "rows" array. Format:
 {
