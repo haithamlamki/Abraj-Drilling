@@ -13,8 +13,9 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Settings, Plus, Trash2, Users, Database, Cog } from "lucide-react";
-import type { System, Equipment, Department, ActionParty, Rig } from "@shared/schema";
+import { Settings, Plus, Trash2, Users, Database, Cog, UserPlus, Edit, Shield } from "lucide-react";
+import type { System, Equipment, Department, ActionParty, Rig, User } from "@shared/schema";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export default function SettingsPage() {
   const { toast } = useToast();
@@ -23,6 +24,14 @@ export default function SettingsPage() {
   const [newItemName, setNewItemName] = useState("");
   const [newSystemId, setNewSystemId] = useState<number | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [newUserData, setNewUserData] = useState({
+    email: "",
+    firstName: "",
+    lastName: "",
+    role: "drilling_manager" as "admin" | "supervisor" | "drilling_manager",
+    rigId: null as number | null,
+  });
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -44,6 +53,7 @@ export default function SettingsPage() {
   const { data: departments = [] } = useQuery<Department[]>({ queryKey: ['/api/departments'] });
   const { data: actionParties = [] } = useQuery<ActionParty[]>({ queryKey: ['/api/action-parties'] });
   const { data: rigs = [] } = useQuery<Rig[]>({ queryKey: ['/api/rigs'] });
+  const { data: users = [] } = useQuery<User[]>({ queryKey: ['/api/users'] });
 
   // Create mutations for each reference type
   const createSystemMutation = useMutation({
@@ -130,6 +140,46 @@ export default function SettingsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/action-parties'] });
       toast({ title: "Success", description: "Action Party deleted successfully" });
+    },
+  });
+
+  const updateUserMutation = useMutation({
+    mutationFn: async ({ id, updates }: { id: string; updates: any }) => 
+      apiRequest(`/api/users/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(updates),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/users'] });
+      toast({ title: "Success", description: "User updated successfully" });
+    },
+  });
+
+  const deleteUserMutation = useMutation({
+    mutationFn: async (id: string) => apiRequest(`/api/users/${id}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/users'] });
+      toast({ title: "Success", description: "User deleted successfully" });
+    },
+  });
+
+  const createUserMutation = useMutation({
+    mutationFn: async (userData: typeof newUserData) => 
+      apiRequest('/api/users', {
+        method: 'POST',
+        body: JSON.stringify(userData),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/users'] });
+      setIsDialogOpen(false);
+      setNewUserData({
+        email: "",
+        firstName: "",
+        lastName: "",
+        role: "drilling_manager",
+        rigId: null,
+      });
+      toast({ title: "Success", description: "User created successfully" });
     },
   });
 
@@ -235,8 +285,12 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            <Tabs defaultValue="systems" className="space-y-4">
-              <TabsList className="grid w-full grid-cols-5">
+            <Tabs defaultValue="users" className="space-y-4">
+              <TabsList className="grid w-full grid-cols-6">
+                <TabsTrigger value="users" className="flex items-center gap-2">
+                  <Users className="h-4 w-4" />
+                  Users
+                </TabsTrigger>
                 <TabsTrigger value="systems" className="flex items-center gap-2">
                   <Database className="h-4 w-4" />
                   Systems
@@ -451,6 +505,184 @@ export default function SettingsPage() {
                             </TableCell>
                           </TableRow>
                         ))}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="users">
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between">
+                    <CardTitle>User Management</CardTitle>
+                    <Dialog open={isDialogOpen && !editingUserId} onOpenChange={(open) => {
+                      if (!open) {
+                        setIsDialogOpen(false);
+                        setNewUserData({
+                          email: "",
+                          firstName: "",
+                          lastName: "",
+                          role: "drilling_manager",
+                          rigId: null,
+                        });
+                      } else {
+                        setIsDialogOpen(true);
+                      }
+                    }}>
+                      <DialogTrigger asChild>
+                        <Button size="sm" data-testid="button-add-user">
+                          <UserPlus className="h-4 w-4 mr-1" />
+                          Add User
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Add New User</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-4">
+                          <div>
+                            <Label htmlFor="email">Email</Label>
+                            <Input
+                              id="email"
+                              type="email"
+                              value={newUserData.email}
+                              onChange={(e) => setNewUserData({ ...newUserData, email: e.target.value })}
+                              placeholder="user@example.com"
+                              data-testid="input-user-email"
+                            />
+                          </div>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <Label htmlFor="firstName">First Name</Label>
+                              <Input
+                                id="firstName"
+                                value={newUserData.firstName}
+                                onChange={(e) => setNewUserData({ ...newUserData, firstName: e.target.value })}
+                                placeholder="John"
+                                data-testid="input-user-firstName"
+                              />
+                            </div>
+                            <div>
+                              <Label htmlFor="lastName">Last Name</Label>
+                              <Input
+                                id="lastName"
+                                value={newUserData.lastName}
+                                onChange={(e) => setNewUserData({ ...newUserData, lastName: e.target.value })}
+                                placeholder="Doe"
+                                data-testid="input-user-lastName"
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <Label htmlFor="role">Role</Label>
+                            <Select
+                              value={newUserData.role}
+                              onValueChange={(value) => setNewUserData({ ...newUserData, role: value as any })}
+                            >
+                              <SelectTrigger id="role" data-testid="select-user-role">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="admin">Admin</SelectItem>
+                                <SelectItem value="supervisor">Supervisor</SelectItem>
+                                <SelectItem value="drilling_manager">Drilling Manager</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <Label htmlFor="rig">Assigned Rig</Label>
+                            <Select
+                              value={newUserData.rigId?.toString() || ""}
+                              onValueChange={(value) => setNewUserData({ ...newUserData, rigId: value ? parseInt(value) : null })}
+                            >
+                              <SelectTrigger id="rig" data-testid="select-user-rig">
+                                <SelectValue placeholder="Select a rig" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="">No Rig</SelectItem>
+                                {rigs.map((rig) => (
+                                  <SelectItem key={rig.id} value={rig.id.toString()}>
+                                    Rig {rig.rigNumber} - {rig.location}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="flex justify-end gap-2">
+                            <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+                              Cancel
+                            </Button>
+                            <Button 
+                              onClick={() => createUserMutation.mutate(newUserData)}
+                              disabled={createUserMutation.isPending || !newUserData.email || !newUserData.firstName || !newUserData.lastName}
+                              data-testid="button-create-user"
+                            >
+                              {createUserMutation.isPending ? "Creating..." : "Create User"}
+                            </Button>
+                          </div>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
+                  </CardHeader>
+                  <CardContent>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Name</TableHead>
+                          <TableHead>Email</TableHead>
+                          <TableHead>Role</TableHead>
+                          <TableHead>Assigned Rig</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {users.map((currentUserData) => {
+                          const assignedRig = currentUserData.rigId ? rigs.find(r => r.id === currentUserData.rigId) : null;
+                          return (
+                            <TableRow key={currentUserData.id}>
+                              <TableCell className="font-medium">
+                                {currentUserData.firstName} {currentUserData.lastName}
+                              </TableCell>
+                              <TableCell>{currentUserData.email}</TableCell>
+                              <TableCell>
+                                <Badge variant={currentUserData.role === 'admin' ? 'destructive' : 'default'}>
+                                  <Shield className="h-3 w-3 mr-1" />
+                                  {currentUserData.role}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                {assignedRig ? `Rig ${assignedRig.rigNumber}` : '-'}
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="default">Active</Badge>
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex gap-1">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setEditingUserId(currentUserData.id)}
+                                    data-testid={`button-edit-user-${currentUserData.id}`}
+                                  >
+                                    <Edit className="h-4 w-4" />
+                                  </Button>
+                                  {currentUserData.id !== user?.id && (
+                                    <Button
+                                      variant="destructive"
+                                      size="sm"
+                                      onClick={() => deleteUserMutation.mutate(currentUserData.id)}
+                                      disabled={deleteUserMutation.isPending}
+                                      data-testid={`button-delete-user-${currentUserData.id}`}
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  )}
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
                       </TableBody>
                     </Table>
                   </CardContent>

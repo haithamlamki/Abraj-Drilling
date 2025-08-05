@@ -23,6 +23,7 @@ The platform serves different user roles (drilling managers, supervisors, and ad
 - **Confidence Scoring**: Advanced algorithms provide confidence metrics for extraction accuracy
 - **Unified Report Generation**: Single billing rows now generate complete structured NPT reports with proper field mapping
 - **Excel Format Layout**: Complete NPT form redesigned as exact 19-column Excel table format with labeled cells (A-S) matching original spreadsheet structure
+- **Complete Admin Center**: Full user management system with create/edit/delete operations, role assignments, and rig associations for admins
 
 ## User Preferences
 

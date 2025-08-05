@@ -30,6 +30,99 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // User management routes (Admin only)
+  app.get('/api/users', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const currentUser = await storage.getUser(userId);
+      
+      if (currentUser?.role !== 'admin') {
+        return res.status(403).json({ message: "Only admins can view all users" });
+      }
+      
+      const users = await storage.getAllUsers();
+      res.json(users);
+    } catch (error) {
+      console.error("Error fetching users:", error);
+      res.status(500).json({ message: "Failed to fetch users" });
+    }
+  });
+
+  app.patch('/api/users/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const currentUser = await storage.getUser(userId);
+      
+      if (currentUser?.role !== 'admin') {
+        return res.status(403).json({ message: "Only admins can update users" });
+      }
+      
+      const { id } = req.params;
+      const updateData = req.body;
+      
+      const updatedUser = await storage.updateUser(id, updateData);
+      res.json(updatedUser);
+    } catch (error) {
+      console.error("Error updating user:", error);
+      res.status(500).json({ message: "Failed to update user" });
+    }
+  });
+
+  app.delete('/api/users/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const currentUser = await storage.getUser(userId);
+      
+      if (currentUser?.role !== 'admin') {
+        return res.status(403).json({ message: "Only admins can delete users" });
+      }
+      
+      const { id } = req.params;
+      
+      // Prevent self-deletion
+      if (id === userId) {
+        return res.status(400).json({ message: "Cannot delete your own account" });
+      }
+      
+      await storage.deleteUser(id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting user:", error);
+      res.status(500).json({ message: "Failed to delete user" });
+    }
+  });
+
+  app.post('/api/users', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const currentUser = await storage.getUser(userId);
+      
+      if (currentUser?.role !== 'admin') {
+        return res.status(403).json({ message: "Only admins can create users" });
+      }
+      
+      const { email, firstName, lastName, role, rigId } = req.body;
+      
+      // Create a temporary user ID for the new user
+      const newUserId = `temp_${Date.now()}`;
+      
+      const newUser = await storage.upsertUser({
+        id: newUserId,
+        email,
+        firstName,
+        lastName,
+        role,
+        rigId,
+        profileImageUrl: null,
+      });
+      
+      res.json(newUser);
+    } catch (error) {
+      console.error("Error creating user:", error);
+      res.status(500).json({ message: "Failed to create user" });
+    }
+  });
+
   // Dashboard routes
   app.get('/api/dashboard/stats', isAuthenticated, async (req: any, res) => {
     try {
