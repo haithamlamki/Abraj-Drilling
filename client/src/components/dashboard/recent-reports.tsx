@@ -147,7 +147,7 @@ export default function RecentReports() {
                         >
                           {['Approved', 'Rejected'].includes(report.status!) ? 'View' : 'Edit'}
                         </Button>
-                        {user?.role === 'admin' && (
+                        {user?.role?.toLowerCase() === 'admin' && (
                           <Button
                             variant="ghost"
                             size="sm"

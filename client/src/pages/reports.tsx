@@ -421,7 +421,7 @@ export default function ReportsPage() {
                               >
                                 View
                               </Button>
-                              {user?.role === 'admin' && (
+                              {user?.role?.toLowerCase() === 'admin' && (
                                 <Button
                                   variant="ghost"
                                   size="sm"

@@ -296,7 +296,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user.claims.sub;
       const user = await storage.getUser(userId);
       
-      if (user?.role !== 'admin') {
+      if (user?.role?.toLowerCase() !== 'admin') {
         return res.status(403).json({ message: "Only admins can delete reports" });
       }
       
