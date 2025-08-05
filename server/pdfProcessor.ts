@@ -169,15 +169,21 @@ async function extractBillingDataFromPDF(buffer: Buffer): Promise<BillingSheetRo
 Extract each billing row with the following information:
 - Date (in YYYY-MM-DD format)
 - Hours
-- Rate Type (Operating Rate, Reduced Rate, Repair Rate, Zero Rate, Rig Move, etc.)
+- Rate Type (exact column name from the PDF)
 - Description of work performed
 - NBT Type (Contractual or Abraj)
 - System category for Contractual NBT (from this list: ${CONTRACTUAL_CATEGORIES.join(', ')})
 
-Important rules:
-1. Only extract rows that are NOT "Operating Rate" - these are productive time
-2. Look for columns like "REDUCED RATE", "REPAIR RATE", "ZERO RATE", "RIG MOVE" with non-zero hours
-3. For Contractual NBT, identify the system category from the description
+Important NBT classification rules:
+1. The following rate types are ALL classified as "Abraj" NBT:
+   - ZERO RATE
+   - BREAKDOWN RATE
+   - REDUCE REPAIR RATE
+   - REPAIR RATE
+   - REPAIR RATE T4
+   - Any variation containing "REPAIR", "BREAKDOWN", "REDUCED", or "ZERO"
+2. "Contractual" NBT includes: RIG MOVE, LOGGING, SERVICE, etc.
+3. Operating Rate is productive time - do not include these rows
 4. Extract the ticket number if present (format: DR + numbers)
 
 Return the data as a JSON object with a "rows" array. Format:
