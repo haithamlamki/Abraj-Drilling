@@ -33,10 +33,6 @@ The platform serves different user roles (drilling managers, supervisors, and ad
   - Automatic category detection with intelligent matching
 - **Ticket Number Extraction**: Rig number is extracted from ticket number format (e.g., DR20320250529202901 → Rig 203)
 - **Operating Rate Filtering**: Operating Rate entries are automatically filtered out and do not generate NPT reports
-- **Date Formatting and Sorting**: 
-  - All dates in the system are displayed in dd-mm-yyyy format without time
-  - NPT reports are sorted chronologically from oldest to newest
-  - Billing sheet extraction outputs dates in dd-mm-yyyy format
 
 ## User Preferences
 

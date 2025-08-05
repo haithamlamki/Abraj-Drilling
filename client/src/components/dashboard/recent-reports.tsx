@@ -83,7 +83,7 @@ export default function RecentReports() {
                 {reports.map((report) => (
                   <tr key={report.id} data-testid={`row-recent-report-${report.id}`}>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {format(new Date(report.date), 'dd-MM-yyyy')}
+                      {format(new Date(report.date), 'yyyy-MM-dd')}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {report.hours}

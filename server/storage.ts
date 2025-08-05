@@ -23,7 +23,7 @@ import {
 } from "@shared/schema";
 import type { BillingSheetUpload, BillingUploadResult } from "@shared/billingTypes";
 import { db } from "./db";
-import { eq, desc, asc, and, or, count } from "drizzle-orm";
+import { eq, desc, and, or, count } from "drizzle-orm";
 
 export interface IStorage {
   // User operations (Required for Replit Auth)
@@ -139,10 +139,10 @@ export class DatabaseStorage implements IStorage {
     if (filters?.status) conditions.push(eq(nptReports.status, filters.status));
     
     if (conditions.length > 0) {
-      return await db.select().from(nptReports).where(and(...conditions)).orderBy(asc(nptReports.date));
+      return await db.select().from(nptReports).where(and(...conditions)).orderBy(desc(nptReports.date));
     }
     
-    return await db.select().from(nptReports).orderBy(asc(nptReports.date));
+    return await db.select().from(nptReports).orderBy(desc(nptReports.date));
   }
   
   async getNptReport(id: number): Promise<NptReport | undefined> {

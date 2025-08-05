@@ -63,7 +63,9 @@ export default function ApprovalsPage() {
   // Approval mutations
   const approveReportMutation = useMutation({
     mutationFn: async (reportId: number) => 
-      apiRequest(`/api/npt-reports/${reportId}/approve`, 'POST'),
+      apiRequest(`/api/npt-reports/${reportId}/approve`, {
+        method: 'POST',
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/npt-reports'] });
       setIsReviewDialogOpen(false);
@@ -77,7 +79,10 @@ export default function ApprovalsPage() {
 
   const rejectReportMutation = useMutation({
     mutationFn: async ({ reportId, reason }: { reportId: number; reason: string }) => 
-      apiRequest(`/api/npt-reports/${reportId}/reject`, 'POST', { reason }),
+      apiRequest(`/api/npt-reports/${reportId}/reject`, {
+        method: 'POST',
+        body: JSON.stringify({ reason }),
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/npt-reports'] });
       setIsReviewDialogOpen(false);
@@ -92,7 +97,9 @@ export default function ApprovalsPage() {
 
   const submitForApprovalMutation = useMutation({
     mutationFn: async (reportId: number) => 
-      apiRequest(`/api/npt-reports/${reportId}/submit`, 'POST'),
+      apiRequest(`/api/npt-reports/${reportId}/submit`, {
+        method: 'POST',
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/npt-reports'] });
       toast({
@@ -160,7 +167,7 @@ export default function ApprovalsPage() {
           const system = systems.find(s => s.name === report.system);
           return (
             <TableRow key={report.id}>
-              <TableCell>{new Date(report.date).toLocaleDateString('en-GB').replace(/\//g, '-')}</TableCell>
+              <TableCell>{new Date(report.date).toLocaleDateString()}</TableCell>
               <TableCell>Rig {rig?.rigNumber}</TableCell>
               <TableCell>{report.nptType}</TableCell>
               <TableCell>{report.hours}</TableCell>

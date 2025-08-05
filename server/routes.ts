@@ -624,7 +624,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       for (const report of filteredReports) {
         const rig = await storage.getRig(report.rigId);
         const row = [
-          new Date(report.date).toLocaleDateString('en-GB').replace(/\//g, '-'),
+          new Date(report.date).toLocaleDateString(),
           rig?.rigNumber || '',
           report.year,
           report.month,

@@ -107,7 +107,7 @@ export default function FileUpload() {
   // Create NPT reports from processed data
   const createReportsMutation = useMutation({
     mutationFn: async (rows: BillingSheetRow[]) => {
-      return await apiRequest('POST', `/api/billing-convert`, { rows });
+      return await apiRequest(`/api/billing-convert`, 'POST', { rows });
     },
     onSuccess: () => {
       toast({
@@ -371,7 +371,7 @@ export default function FileUpload() {
                               <tr key={index} className="hover:bg-gray-50">
                                 <td className="border border-gray-300 p-2 font-medium">{row.rigNumber}</td>
                                 <td className="border border-gray-300 p-2 text-sm">
-                                  {row.date}
+                                  {new Date(row.date).toLocaleDateString()}
                                 </td>
                                 <td className="border border-gray-300 p-2 text-sm">{row.hours}</td>
                                 <td className="border border-gray-300 p-2">
@@ -421,7 +421,7 @@ export default function FileUpload() {
                             const csvContent = [
                               ['Date', 'Rig', 'Year', 'Month', 'Hours', 'NBT Type', 'Rate Type', 'System', 'Equipment', 'Confidence %', 'Description'],
                               ...currentResult.extractedData.map(row => [
-                                row.date,
+                                new Date(row.date).toLocaleDateString(),
                                 row.rigNumber,
                                 row.year,
                                 row.month,
@@ -484,7 +484,7 @@ export default function FileUpload() {
                           <div>
                             <div className="font-medium">{upload.fileName}</div>
                             <div className="text-sm text-gray-500">
-                              {new Date(upload.uploadDate).toLocaleDateString('en-GB').replace(/\//g, '-')}
+                              {new Date(upload.uploadDate).toLocaleDateString()}
                             </div>
                           </div>
                         </div>
