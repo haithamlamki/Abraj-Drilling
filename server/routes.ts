@@ -475,7 +475,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const { rows, metadata } = await processPDFBilling(req.file.buffer);
         
         // Enhance rows with NPT data
-        const enhancedRows = rows.map(row => enhanceBillingRowWithNPTData(row));
+        const enhancedRows = rows.map(row => enhanceBillingRowWithNPTData(row, metadata));
         
         result = {
           fileName,
