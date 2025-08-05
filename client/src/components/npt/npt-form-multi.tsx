@@ -299,14 +299,13 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
                             name={`rows.${index}.system`}
                             render={({ field }) => (
                               <FormItem>
-                                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                <Select onValueChange={field.onChange} value={field.value || undefined}>
                                   <FormControl>
                                     <SelectTrigger className="w-28 h-8 text-xs">
-                                      <SelectValue />
+                                      <SelectValue placeholder="Select..." />
                                     </SelectTrigger>
                                   </FormControl>
                                   <SelectContent>
-                                    <SelectItem value="">Select</SelectItem>
                                     {systems.map((sys) => (
                                       <SelectItem key={sys.id} value={sys.name}>
                                         {sys.name}
@@ -326,14 +325,13 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
                             name={`rows.${index}.equipment`}
                             render={({ field }) => (
                               <FormItem>
-                                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                <Select onValueChange={field.onChange} value={field.value || undefined}>
                                   <FormControl>
                                     <SelectTrigger className="w-28 h-8 text-xs">
-                                      <SelectValue />
+                                      <SelectValue placeholder="Select..." />
                                     </SelectTrigger>
                                   </FormControl>
                                   <SelectContent>
-                                    <SelectItem value="">Select</SelectItem>
                                     {equipment.map((eq) => (
                                       <SelectItem key={eq.id} value={eq.name}>
                                         {eq.name}
@@ -383,14 +381,13 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
                             name={`rows.${index}.department`}
                             render={({ field }) => (
                               <FormItem>
-                                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                <Select onValueChange={field.onChange} value={field.value || undefined}>
                                   <FormControl>
                                     <SelectTrigger className="w-24 h-8 text-xs">
-                                      <SelectValue />
+                                      <SelectValue placeholder="Select..." />
                                     </SelectTrigger>
                                   </FormControl>
                                   <SelectContent>
-                                    <SelectItem value="">Select</SelectItem>
                                     {departments.map((dept) => (
                                       <SelectItem key={dept.id} value={dept.name}>
                                         {dept.name}
@@ -470,14 +467,13 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
                             name={`rows.${index}.actionParty`}
                             render={({ field }) => (
                               <FormItem>
-                                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                <Select onValueChange={field.onChange} value={field.value || undefined}>
                                   <FormControl>
                                     <SelectTrigger className="w-28 h-8 text-xs">
-                                      <SelectValue />
+                                      <SelectValue placeholder="Select..." />
                                     </SelectTrigger>
                                   </FormControl>
                                   <SelectContent>
-                                    <SelectItem value="">Select</SelectItem>
                                     {actionParties.map((party) => (
                                       <SelectItem key={party.id} value={party.name}>
                                         {party.name}
