@@ -1,11 +1,51 @@
 import type { BillingSheetRow } from '@shared/billingTypes';
 import OpenAI from 'openai';
+import PDFParser from 'pdf2json';
 
-// Dynamic import to avoid pdf-parse loading test files at startup
-const getPdfParse = async () => {
-  const pdfParse = await import('pdf-parse');
-  return pdfParse.default;
-};
+// PDF text extraction using pdf2json
+async function extractTextFromPDF(buffer: Buffer): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const pdfParser = new PDFParser();
+    
+    pdfParser.on('pdfParser_dataError', (errData: any) => {
+      console.error('PDF parsing error:', errData.parserError);
+      reject(new Error('Failed to parse PDF'));
+    });
+    
+    pdfParser.on('pdfParser_dataReady', (pdfData: any) => {
+      try {
+        // Extract text from all pages
+        let fullText = '';
+        
+        if (pdfData && pdfData.Pages) {
+          pdfData.Pages.forEach((page: any) => {
+            if (page.Texts) {
+              page.Texts.forEach((text: any) => {
+                if (text.R) {
+                  text.R.forEach((r: any) => {
+                    if (r.T) {
+                      // Decode URI component and replace spaces
+                      fullText += decodeURIComponent(r.T) + ' ';
+                    }
+                  });
+                }
+              });
+              fullText += '\n';
+            }
+          });
+        }
+        
+        resolve(fullText.trim());
+      } catch (error) {
+        console.error('Error processing PDF data:', error);
+        reject(new Error('Failed to extract text from PDF'));
+      }
+    });
+    
+    // Parse the PDF buffer
+    pdfParser.parseBuffer(buffer);
+  });
+}
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -85,9 +125,7 @@ export async function processPDFBilling(buffer: Buffer): Promise<{
   
   try {
     // Extract text from PDF for metadata
-    const pdfParse = await getPdfParse();
-    const pdfData = await pdfParse(buffer);
-    const extractedText = pdfData.text;
+    const extractedText = await extractTextFromPDF(buffer);
     
     // Extract metadata from the PDF text
     const metadata = extractMetadata(extractedText);
@@ -117,9 +155,7 @@ async function extractBillingDataFromPDF(buffer: Buffer): Promise<BillingSheetRo
     console.log('PDF processing initiated. Size:', buffer.length, 'bytes');
     
     // Extract text from PDF
-    const pdfParse = await getPdfParse();
-    const pdfData = await pdfParse(buffer);
-    const extractedText = pdfData.text;
+    const extractedText = await extractTextFromPDF(buffer);
     
     console.log('PDF text extraction completed. Text length:', extractedText.length);
     
