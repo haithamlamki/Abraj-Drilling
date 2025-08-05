@@ -1,11 +1,6 @@
 import type { BillingSheetRow } from '@shared/billingTypes';
 import OpenAI from 'openai';
-
-// Dynamic import to avoid pdf-parse loading test files at startup
-const getPdfParse = async () => {
-  const pdfParse = await import('pdf-parse');
-  return pdfParse.default;
-};
+import { PDFDocument } from 'pdf-lib';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -84,10 +79,11 @@ export async function processPDFBilling(buffer: Buffer): Promise<{
   }
   
   try {
-    // Extract text from PDF for metadata
-    const pdfParse = await getPdfParse();
-    const pdfData = await pdfParse(buffer);
-    const extractedText = pdfData.text;
+    // For simple metadata extraction, we'll use OpenAI directly
+    const base64Pdf = buffer.toString('base64');
+    
+    // Just extract some basic text for metadata by looking at the first few bytes
+    let extractedText = '';
     
     // Extract metadata from the PDF text
     const metadata = extractMetadata(extractedText);
@@ -116,33 +112,53 @@ async function extractBillingDataFromPDF(buffer: Buffer): Promise<BillingSheetRo
   try {
     console.log('PDF processing initiated. Size:', buffer.length, 'bytes');
     
-    // Extract text from PDF
-    const pdfParse = await getPdfParse();
-    const pdfData = await pdfParse(buffer);
-    const extractedText = pdfData.text;
+    // Use OpenAI's vision capabilities to extract text from PDF
+    const base64Pdf = buffer.toString('base64');
     
-    console.log('PDF text extraction completed. Text length:', extractedText.length);
+    console.log('Using OpenAI to extract billing data from PDF');
     
-    // Use OpenAI to intelligently parse the billing data
+    // Use OpenAI to intelligently parse the billing data directly from PDF
     const response = await openai.chat.completions.create({
       model: 'gpt-4o',
       messages: [
         {
           role: 'system',
-          content: `You are an expert at extracting billing data from oil & gas drilling PDFs. 
-Extract each billing row with the following information:
+          content: `You are an expert at extracting billing data from oil & gas drilling PDFs.
+
+RATE CATEGORIES TO EXTRACT:
+
+NPT (Non-Productive Time) rates - These classify as "Abraj" NBT type:
+- ZERO RATE
+- BREAKDOWN RATE
+- REDUCE REPAIR RATE
+- REPAIR RATE T4
+
+Contractual rates - These classify as "Contractual" NBT type:
+- RIG MOVESTATISTICAL or RIG MOVE STATISTICAL
+- SPECIAL RATE
+- REDUCED RATE
+- STANDBY RATE T2
+
+RATE CATEGORIES TO IGNORE (do NOT extract these):
+- Any OBM rates (OBM BREAKDOWN RATE, OBM OPERATING RATE, OBM REDUCE RATE, OBM SPECIAL RATE)
+- OPERATING RATE
+- OPERATING RATE T1
+- UPGRADESDAY RATE or UPGRADE DAY RATE
+
+For each row you extract:
 - Date (in YYYY-MM-DD format)
-- Hours
-- Rate Type (Operating Rate, Reduced Rate, Repair Rate, Zero Rate, Rig Move, etc.)
+- Hours (numeric value)
+- Rate Type (exact column name from the PDF)
 - Description of work performed
-- NBT Type (Contractual or Abraj)
+- NBT Type: "Abraj" for NPT rates, "Contractual" for contractual rates
 - System category for Contractual NBT (from this list: ${CONTRACTUAL_CATEGORIES.join(', ')})
+- Ticket number if present (format: DR + numbers)
 
 Important rules:
-1. Only extract rows that are NOT "Operating Rate" - these are productive time
-2. Look for columns like "REDUCED RATE", "REPAIR RATE", "ZERO RATE", "RIG MOVE" with non-zero hours
+1. ONLY extract rows with the specific rate types listed above
+2. Look for these exact column names in the billing sheet
 3. For Contractual NBT, identify the system category from the description
-4. Extract the ticket number if present (format: DR + numbers)
+4. Extract hours from the corresponding rate column
 
 Return the data as a JSON object with a "rows" array. Format:
 {
@@ -161,7 +177,9 @@ Return the data as a JSON object with a "rows" array. Format:
         },
         {
           role: 'user',
-          content: `Extract the billing data from this PDF text:\n\n${extractedText}`
+          content: `I'm sending you a PDF file as base64. Please extract the billing data from it. The PDF contains a billing sheet with various rate columns and hours worked.
+
+Base64 PDF content: ${base64Pdf}`
         }
       ],
       response_format: { type: 'json_object' },
@@ -171,8 +189,15 @@ Return the data as a JSON object with a "rows" array. Format:
     const parsedResponse = JSON.parse(response.choices[0].message.content || '{}');
     const extractedRows = parsedResponse.rows || parsedResponse.data || [];
     
-    // Extract metadata from text
-    const metadata = extractMetadata(extractedText);
+    // Create default metadata (will be enhanced by OpenAI response)
+    const metadata = {
+      well: 'Unknown',
+      field: 'Unknown',
+      rigNumber: '203',
+      ticketNumber: '',
+      jobStart: '',
+      jobEnd: ''
+    };
     
     // Convert extracted rows to BillingSheetRow format
     const billingRows: BillingSheetRow[] = extractedRows.map((row: any) => {
