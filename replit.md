@@ -38,6 +38,18 @@ The platform serves different user roles (drilling managers, supervisors, and ad
   - Edit any field before saving
   - Remove rows they don't want to create
   - Save all reports at once after review
+- **Automated Workflow System**: Complete workflow implementation with department-based routing:
+  - Drilling department: Tool Pusher → DS → OSE
+  - E-Maintenance department: Tool Pusher → PME → DS → OSE
+  - Role-based permissions for editing and approvals
+  - Workflow status tracking and approval history
+  - Pending approvals dashboard for reviewers
+- **Enhanced Login Page**: Professional login interface with:
+  - Comprehensive feature showcase
+  - Role-based access information
+  - Security policies acknowledgment
+  - Platform capabilities overview
+  - Version 2.0 highlights
 
 ## User Preferences
 
