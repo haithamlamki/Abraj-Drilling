@@ -107,7 +107,8 @@ export default function FileUpload() {
   // Create NPT reports from processed data
   const createReportsMutation = useMutation({
     mutationFn: async (rows: BillingSheetRow[]) => {
-      return await apiRequest(`/api/billing-convert`, 'POST', { rows });
+      const response = await apiRequest('POST', '/api/billing-convert', { rows });
+      return response.json();
     },
     onSuccess: () => {
       toast({
