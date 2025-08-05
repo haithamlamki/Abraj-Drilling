@@ -109,17 +109,21 @@ export default function FileUpload() {
   // Create NPT reports from processed data
   const createReportsMutation = useMutation({
     mutationFn: async (rows: BillingSheetRow[]) => {
-      const response = await apiRequest('POST', '/api/billing-convert', { rows });
+      const response = await apiRequest('POST', '/api/npt-reports/from-billing', { rows });
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       toast({
         title: "Success", 
-        description: "NPT reports created successfully",
+        description: data.message || "NPT reports created successfully",
       });
       queryClient.invalidateQueries({ queryKey: ['/api/npt-reports'] });
       queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
       setCurrentResult(null);
+      // Navigate to NPT reports page after successful creation
+      setTimeout(() => {
+        setLocation('/');
+      }, 1500);
     },
     onError: (error) => {
       toast({
@@ -158,12 +162,8 @@ export default function FileUpload() {
   };
 
   const handleCreateReports = () => {
-    if (currentResult?.extractedData && currentResult.extractedData.length > 0) {
-      // Store data in session storage and navigate to NPT form
-      const firstRow = currentResult.extractedData[0];
-      sessionStorage.setItem('billingData', JSON.stringify(firstRow));
-      sessionStorage.setItem('allBillingData', JSON.stringify(currentResult.extractedData));
-      setLocation('/npt-reports');
+    if (currentResult?.extractedData) {
+      createReportsMutation.mutate(currentResult.extractedData);
     }
   };
 
