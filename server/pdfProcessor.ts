@@ -166,38 +166,31 @@ async function extractBillingDataFromPDF(buffer: Buffer): Promise<BillingSheetRo
         {
           role: 'system',
           content: `You are an expert at extracting billing data from oil & gas drilling PDFs. 
-Extract EVERY billing row with the following information:
+Extract EVERY billing row that has non-zero values in ANY of these columns:
+- BREAKDOWN RATE (may appear as "BREAKDO WN RATE" split across lines)
+- REDUCED RATE
+- Any other rate columns that indicate non-productive time
+
+CRITICAL INSTRUCTIONS:
+1. Look at the FIRST numeric column after DATE - this is BREAKDOWN RATE
+2. If this column has ANY non-zero value (0.50, 0.25, 4.00, 13.25, etc.), this is a BREAKDOWN RATE entry
+3. Extract ALL rows where BREAKDOWN RATE column > 0
+4. Pay special attention to dates: 17-05-2025, 23-05-2025, 30-05-2025 which have 0.50 BREAKDOWN RATE
+
+For each row, extract:
 - Date (in YYYY-MM-DD format)
-- Hours (including fractional hours like 0.5, 1.25, etc.)
-- Rate Type (exact column name from the PDF)
+- Hours value from BREAKDOWN RATE column (if > 0, this is the rate type "BREAKDOWN RATE")
+- Hours value from REDUCED RATE column (if > 0, this is the rate type "REDUCED RATE")  
+- Total hours
 - Description of work performed
-- NBT Type (Contractual or Abraj)
-- System category for Contractual NBT (from this list: ${CONTRACTUAL_CATEGORIES.join(', ')})
 
-IMPORTANT: Include ALL entries, even those with:
-- Small durations (0.5 hours, 0.25 hours, etc.)
-- Multiple entries on the same date
-- Entries that may appear in compact or condensed format
+NBT Type Classification:
+- BREAKDOWN RATE = "Abraj" NBT
+- REDUCED RATE = "Contractual" NBT
+- REPAIR RATE = "Abraj" NBT
+- ZERO RATE = "Abraj" NBT
 
-Important NBT classification rules:
-1. The following rate types are classified as "Abraj" NBT:
-   - ZERO RATE
-   - BREAKDOWN RATE
-   - REPAIR RATE (but NOT REDUCE REPAIR RATE)
-   - REPAIR RATE T4
-2. The following rate types are classified as "Contractual" NBT:
-   - REDUCE RATE (any variation)
-   - REDUCE REPAIR RATE
-   - REDUCED REPAIR RATE
-   - RIG MOVE
-   - LOGGING
-   - SERVICE
-   - Any other contractual activities
-3. Operating Rate is productive time - do not include these rows
-4. Extract the ticket number if present (format: DR + numbers)
-5. Extract the exact rate type name as it appears in the PDF
-
-Carefully scan the entire PDF for ALL non-productive time entries. Look for columns that show hours with rate types.
+Look at EVERY row in the table. Some rows have multiple rate types - extract each non-zero rate as a separate entry.
 
 Return the data as a JSON object with a "rows" array. Format:
 {
@@ -205,9 +198,9 @@ Return the data as a JSON object with a "rows" array. Format:
     {
       "date": "YYYY-MM-DD",
       "hours": number,
-      "rateType": "string",
+      "rateType": "BREAKDOWN RATE" or "REDUCED RATE" etc,
       "description": "string",
-      "nbtType": "Contractual" or "Abraj",
+      "nbtType": "Abraj" or "Contractual",
       "system": "string (for Contractual)",
       "ticketNumber": "string (if found)"
     }
