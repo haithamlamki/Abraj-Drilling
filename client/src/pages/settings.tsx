@@ -13,9 +13,10 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Settings, Plus, Trash2, Users, Database, Cog, UserPlus, Edit, Shield, Upload } from "lucide-react";
+import { Settings, Plus, Trash2, Users, Database, Cog, UserPlus, Edit, Shield, Upload, X, Check, Palette, Bell, FileText, Download } from "lucide-react";
 import type { System, Equipment, Department, ActionParty, Rig, User } from "@shared/schema";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 
 export default function SettingsPage() {
   const { toast } = useToast();
@@ -35,6 +36,26 @@ export default function SettingsPage() {
   const [showRigDialog, setShowRigDialog] = useState(false);
   const [editingRig, setEditingRig] = useState<Rig | null>(null);
   const [showRigImportDialog, setShowRigImportDialog] = useState(false);
+  
+  // Inline editing states
+  const [editingItemId, setEditingItemId] = useState<number | null>(null);
+  const [editingItemName, setEditingItemName] = useState("");
+  const [editingType, setEditingType] = useState<"system" | "equipment" | "department" | "actionParty" | null>(null);
+  
+  // Admin customization states
+  const [customSettings, setCustomSettings] = useState({
+    companyName: "Drilling Operations Inc.",
+    primaryColor: "#0066cc",
+    notificationEmail: "admin@drillingops.com",
+    enableEmailAlerts: true,
+    autoApproveThreshold: 24,
+    dataRetentionDays: 365,
+    defaultDashboardView: "overview",
+    enableDataExport: true,
+    enableBulkOperations: true,
+    requireApprovalComments: false,
+    enableAuditLog: true,
+  });
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -154,6 +175,59 @@ export default function SettingsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/action-parties'] });
       toast({ title: "Success", description: "Action Party deleted successfully" });
+    },
+  });
+
+  // Update mutations for inline editing
+  const updateSystemMutation = useMutation({
+    mutationFn: async ({ id, name }: { id: number; name: string }) => {
+      const response = await apiRequest('PATCH', `/api/systems/${id}`, { name });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/systems'] });
+      setEditingItemId(null);
+      setEditingType(null);
+      toast({ title: "Success", description: "System updated successfully" });
+    },
+  });
+
+  const updateEquipmentMutation = useMutation({
+    mutationFn: async ({ id, name }: { id: number; name: string }) => {
+      const response = await apiRequest('PATCH', `/api/equipment/${id}`, { name });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/equipment'] });
+      setEditingItemId(null);
+      setEditingType(null);
+      toast({ title: "Success", description: "Equipment updated successfully" });
+    },
+  });
+
+  const updateDepartmentMutation = useMutation({
+    mutationFn: async ({ id, name }: { id: number; name: string }) => {
+      const response = await apiRequest('PATCH', `/api/departments/${id}`, { name });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/departments'] });
+      setEditingItemId(null);
+      setEditingType(null);
+      toast({ title: "Success", description: "Department updated successfully" });
+    },
+  });
+
+  const updateActionPartyMutation = useMutation({
+    mutationFn: async ({ id, name }: { id: number; name: string }) => {
+      const response = await apiRequest('PATCH', `/api/action-parties/${id}`, { name });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/action-parties'] });
+      setEditingItemId(null);
+      setEditingType(null);
+      toast({ title: "Success", description: "Action Party updated successfully" });
     },
   });
 
@@ -362,7 +436,7 @@ export default function SettingsPage() {
             </div>
 
             <Tabs defaultValue="users" className="space-y-4">
-              <TabsList className="grid w-full grid-cols-6">
+              <TabsList className="grid w-full grid-cols-7">
                 <TabsTrigger value="users" className="flex items-center gap-2">
                   <Users className="h-4 w-4" />
                   Users
@@ -381,6 +455,10 @@ export default function SettingsPage() {
                 </TabsTrigger>
                 <TabsTrigger value="action-parties">Action Parties</TabsTrigger>
                 <TabsTrigger value="rigs">Rigs</TabsTrigger>
+                <TabsTrigger value="customization" className="flex items-center gap-2">
+                  <Palette className="h-4 w-4" />
+                  Customize
+                </TabsTrigger>
               </TabsList>
 
               <TabsContent value="systems">
@@ -407,7 +485,56 @@ export default function SettingsPage() {
                       <TableBody>
                         {systems.map((system) => (
                           <TableRow key={system.id}>
-                            <TableCell className="font-medium">{system.name}</TableCell>
+                            <TableCell className="font-medium">
+                              {editingItemId === system.id && editingType === "system" ? (
+                                <div className="flex items-center gap-2">
+                                  <Input
+                                    value={editingItemName}
+                                    onChange={(e) => setEditingItemName(e.target.value)}
+                                    className="h-8 w-48"
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter") {
+                                        updateSystemMutation.mutate({ id: system.id, name: editingItemName });
+                                      } else if (e.key === "Escape") {
+                                        setEditingItemId(null);
+                                        setEditingType(null);
+                                      }
+                                    }}
+                                    autoFocus
+                                  />
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => updateSystemMutation.mutate({ id: system.id, name: editingItemName })}
+                                    disabled={updateSystemMutation.isPending}
+                                  >
+                                    <Check className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => {
+                                      setEditingItemId(null);
+                                      setEditingType(null);
+                                    }}
+                                  >
+                                    <X className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              ) : (
+                                <div 
+                                  className="flex items-center gap-2 cursor-pointer hover:underline"
+                                  onClick={() => {
+                                    setEditingItemId(system.id);
+                                    setEditingItemName(system.name);
+                                    setEditingType("system");
+                                  }}
+                                >
+                                  {system.name}
+                                  <Edit className="h-3 w-3 opacity-50" />
+                                </div>
+                              )}
+                            </TableCell>
                             <TableCell>
                               <Badge variant={system.isActive ? "default" : "secondary"}>
                                 {system.isActive ? "Active" : "Inactive"}
@@ -464,7 +591,56 @@ export default function SettingsPage() {
                           const system = systems.find(s => s.id === eq.systemId);
                           return (
                             <TableRow key={eq.id}>
-                              <TableCell className="font-medium">{eq.name}</TableCell>
+                              <TableCell className="font-medium">
+                                {editingItemId === eq.id && editingType === "equipment" ? (
+                                  <div className="flex items-center gap-2">
+                                    <Input
+                                      value={editingItemName}
+                                      onChange={(e) => setEditingItemName(e.target.value)}
+                                      className="h-8 w-48"
+                                      onKeyDown={(e) => {
+                                        if (e.key === "Enter") {
+                                          updateEquipmentMutation.mutate({ id: eq.id, name: editingItemName });
+                                        } else if (e.key === "Escape") {
+                                          setEditingItemId(null);
+                                          setEditingType(null);
+                                        }
+                                      }}
+                                      autoFocus
+                                    />
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={() => updateEquipmentMutation.mutate({ id: eq.id, name: editingItemName })}
+                                      disabled={updateEquipmentMutation.isPending}
+                                    >
+                                      <Check className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={() => {
+                                        setEditingItemId(null);
+                                        setEditingType(null);
+                                      }}
+                                    >
+                                      <X className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  <div 
+                                    className="flex items-center gap-2 cursor-pointer hover:underline"
+                                    onClick={() => {
+                                      setEditingItemId(eq.id);
+                                      setEditingItemName(eq.name);
+                                      setEditingType("equipment");
+                                    }}
+                                  >
+                                    {eq.name}
+                                    <Edit className="h-3 w-3 opacity-50" />
+                                  </div>
+                                )}
+                              </TableCell>
                               <TableCell>{system?.name || 'Unknown'}</TableCell>
                               <TableCell>
                                 <Badge variant={eq.isActive ? "default" : "secondary"}>
@@ -514,7 +690,56 @@ export default function SettingsPage() {
                       <TableBody>
                         {departments.map((dept) => (
                           <TableRow key={dept.id}>
-                            <TableCell className="font-medium">{dept.name}</TableCell>
+                            <TableCell className="font-medium">
+                              {editingItemId === dept.id && editingType === "department" ? (
+                                <div className="flex items-center gap-2">
+                                  <Input
+                                    value={editingItemName}
+                                    onChange={(e) => setEditingItemName(e.target.value)}
+                                    className="h-8 w-48"
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter") {
+                                        updateDepartmentMutation.mutate({ id: dept.id, name: editingItemName });
+                                      } else if (e.key === "Escape") {
+                                        setEditingItemId(null);
+                                        setEditingType(null);
+                                      }
+                                    }}
+                                    autoFocus
+                                  />
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => updateDepartmentMutation.mutate({ id: dept.id, name: editingItemName })}
+                                    disabled={updateDepartmentMutation.isPending}
+                                  >
+                                    <Check className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => {
+                                      setEditingItemId(null);
+                                      setEditingType(null);
+                                    }}
+                                  >
+                                    <X className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              ) : (
+                                <div 
+                                  className="flex items-center gap-2 cursor-pointer hover:underline"
+                                  onClick={() => {
+                                    setEditingItemId(dept.id);
+                                    setEditingItemName(dept.name);
+                                    setEditingType("department");
+                                  }}
+                                >
+                                  {dept.name}
+                                  <Edit className="h-3 w-3 opacity-50" />
+                                </div>
+                              )}
+                            </TableCell>
                             <TableCell>
                               <Badge variant={dept.isActive ? "default" : "secondary"}>
                                 {dept.isActive ? "Active" : "Inactive"}
@@ -562,7 +787,56 @@ export default function SettingsPage() {
                       <TableBody>
                         {actionParties.map((party) => (
                           <TableRow key={party.id}>
-                            <TableCell className="font-medium">{party.name}</TableCell>
+                            <TableCell className="font-medium">
+                              {editingItemId === party.id && editingType === "actionParty" ? (
+                                <div className="flex items-center gap-2">
+                                  <Input
+                                    value={editingItemName}
+                                    onChange={(e) => setEditingItemName(e.target.value)}
+                                    className="h-8 w-48"
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter") {
+                                        updateActionPartyMutation.mutate({ id: party.id, name: editingItemName });
+                                      } else if (e.key === "Escape") {
+                                        setEditingItemId(null);
+                                        setEditingType(null);
+                                      }
+                                    }}
+                                    autoFocus
+                                  />
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => updateActionPartyMutation.mutate({ id: party.id, name: editingItemName })}
+                                    disabled={updateActionPartyMutation.isPending}
+                                  >
+                                    <Check className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => {
+                                      setEditingItemId(null);
+                                      setEditingType(null);
+                                    }}
+                                  >
+                                    <X className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              ) : (
+                                <div 
+                                  className="flex items-center gap-2 cursor-pointer hover:underline"
+                                  onClick={() => {
+                                    setEditingItemId(party.id);
+                                    setEditingItemName(party.name);
+                                    setEditingType("actionParty");
+                                  }}
+                                >
+                                  {party.name}
+                                  <Edit className="h-3 w-3 opacity-50" />
+                                </div>
+                              )}
+                            </TableCell>
                             <TableCell>
                               <Badge variant={party.isActive ? "default" : "secondary"}>
                                 {party.isActive ? "Active" : "Inactive"}
@@ -832,6 +1106,242 @@ export default function SettingsPage() {
                     </Table>
                   </CardContent>
                 </Card>
+              </TabsContent>
+              
+              <TabsContent value="customization">
+                <div className="space-y-6">
+                  {/* General Settings */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Settings className="h-5 w-5" />
+                        General Settings
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor="companyName">Company Name</Label>
+                          <Input 
+                            id="companyName"
+                            value={customSettings.companyName}
+                            onChange={(e) => setCustomSettings({...customSettings, companyName: e.target.value})}
+                            placeholder="Enter company name"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="primaryColor">Primary Color</Label>
+                          <div className="flex gap-2">
+                            <Input 
+                              id="primaryColor"
+                              type="color"
+                              value={customSettings.primaryColor}
+                              onChange={(e) => setCustomSettings({...customSettings, primaryColor: e.target.value})}
+                              className="w-20 h-10 p-1"
+                            />
+                            <Input 
+                              value={customSettings.primaryColor}
+                              onChange={(e) => setCustomSettings({...customSettings, primaryColor: e.target.value})}
+                              placeholder="#0066cc"
+                              className="flex-1"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div>
+                        <Label htmlFor="defaultDashboard">Default Dashboard View</Label>
+                        <Select 
+                          value={customSettings.defaultDashboardView}
+                          onValueChange={(value) => setCustomSettings({...customSettings, defaultDashboardView: value})}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="overview">Overview</SelectItem>
+                            <SelectItem value="detailed">Detailed Analytics</SelectItem>
+                            <SelectItem value="reports">Reports Focus</SelectItem>
+                            <SelectItem value="approvals">Approvals Queue</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Notification Settings */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Bell className="h-5 w-5" />
+                        Notification Settings
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div>
+                        <Label htmlFor="notificationEmail">Notification Email</Label>
+                        <Input 
+                          id="notificationEmail"
+                          type="email"
+                          value={customSettings.notificationEmail}
+                          onChange={(e) => setCustomSettings({...customSettings, notificationEmail: e.target.value})}
+                          placeholder="admin@example.com"
+                        />
+                      </div>
+                      
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <Label htmlFor="enableEmailAlerts">Enable Email Alerts</Label>
+                          <p className="text-sm text-gray-500">Send email notifications for important events</p>
+                        </div>
+                        <Switch 
+                          id="enableEmailAlerts"
+                          checked={customSettings.enableEmailAlerts}
+                          onCheckedChange={(checked) => setCustomSettings({...customSettings, enableEmailAlerts: checked})}
+                        />
+                      </div>
+                      
+                      <div>
+                        <Label htmlFor="autoApproveThreshold">Auto-Approve Threshold (hours)</Label>
+                        <Input 
+                          id="autoApproveThreshold"
+                          type="number"
+                          value={customSettings.autoApproveThreshold}
+                          onChange={(e) => setCustomSettings({...customSettings, autoApproveThreshold: parseInt(e.target.value)})}
+                          placeholder="24"
+                        />
+                        <p className="text-sm text-gray-500 mt-1">NPT reports under this duration will be auto-approved</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Data Management */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <FileText className="h-5 w-5" />
+                        Data Management
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div>
+                        <Label htmlFor="dataRetentionDays">Data Retention Period (days)</Label>
+                        <Input 
+                          id="dataRetentionDays"
+                          type="number"
+                          value={customSettings.dataRetentionDays}
+                          onChange={(e) => setCustomSettings({...customSettings, dataRetentionDays: parseInt(e.target.value)})}
+                          placeholder="365"
+                        />
+                        <p className="text-sm text-gray-500 mt-1">How long to keep historical data</p>
+                      </div>
+                      
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <Label htmlFor="enableDataExport">Enable Data Export</Label>
+                          <p className="text-sm text-gray-500">Allow users to export data to CSV/Excel</p>
+                        </div>
+                        <Switch 
+                          id="enableDataExport"
+                          checked={customSettings.enableDataExport}
+                          onCheckedChange={(checked) => setCustomSettings({...customSettings, enableDataExport: checked})}
+                        />
+                      </div>
+                      
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <Label htmlFor="enableBulkOperations">Enable Bulk Operations</Label>
+                          <p className="text-sm text-gray-500">Allow bulk editing and deletion of records</p>
+                        </div>
+                        <Switch 
+                          id="enableBulkOperations"
+                          checked={customSettings.enableBulkOperations}
+                          onCheckedChange={(checked) => setCustomSettings({...customSettings, enableBulkOperations: checked})}
+                        />
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Security & Compliance */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Shield className="h-5 w-5" />
+                        Security & Compliance
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <Label htmlFor="requireApprovalComments">Require Approval Comments</Label>
+                          <p className="text-sm text-gray-500">Mandatory comments when approving/rejecting</p>
+                        </div>
+                        <Switch 
+                          id="requireApprovalComments"
+                          checked={customSettings.requireApprovalComments}
+                          onCheckedChange={(checked) => setCustomSettings({...customSettings, requireApprovalComments: checked})}
+                        />
+                      </div>
+                      
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <Label htmlFor="enableAuditLog">Enable Audit Log</Label>
+                          <p className="text-sm text-gray-500">Track all system changes and user actions</p>
+                        </div>
+                        <Switch 
+                          id="enableAuditLog"
+                          checked={customSettings.enableAuditLog}
+                          onCheckedChange={(checked) => setCustomSettings({...customSettings, enableAuditLog: checked})}
+                        />
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Quick Actions */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Download className="h-5 w-5" />
+                        Quick Actions
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <Button variant="outline" className="flex items-center gap-2">
+                          <Download className="h-4 w-4" />
+                          Export All Settings
+                        </Button>
+                        <Button variant="outline" className="flex items-center gap-2">
+                          <Upload className="h-4 w-4" />
+                          Import Settings
+                        </Button>
+                        <Button variant="outline" className="flex items-center gap-2">
+                          <FileText className="h-4 w-4" />
+                          Generate System Report
+                        </Button>
+                        <Button variant="outline" className="flex items-center gap-2">
+                          <Shield className="h-4 w-4" />
+                          View Audit Logs
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Save Settings Button */}
+                  <div className="flex justify-end">
+                    <Button 
+                      size="lg" 
+                      onClick={() => {
+                        toast({
+                          title: "Settings Saved",
+                          description: "All customization settings have been saved successfully.",
+                        });
+                      }}
+                    >
+                      Save All Settings
+                    </Button>
+                  </div>
+                </div>
               </TabsContent>
             </Tabs>
           </div>
