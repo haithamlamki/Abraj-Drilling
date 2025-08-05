@@ -131,13 +131,13 @@ export default function FileUpload() {
     const file = event.target.files?.[0];
     if (file) {
       // Validate file type
-      const allowedTypes = ['.csv', '.xlsx', '.xls', '.txt'];
+      const allowedTypes = ['.csv', '.xlsx', '.xls', '.txt', '.pdf'];
       const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase();
       
       if (!allowedTypes.includes(fileExtension)) {
         toast({
           title: "Invalid File Type",
-          description: "Please upload CSV, Excel, or text files only",
+          description: "Please upload CSV, Excel, text, or PDF files only",
           variant: "destructive",
         });
         return;
@@ -203,7 +203,7 @@ export default function FileUpload() {
                   <Input
                     id="file-upload"
                     type="file"
-                    accept=".csv,.xlsx,.xls,.txt"
+                    accept=".csv,.xlsx,.xls,.txt,.pdf"
                     onChange={handleFileSelect}
                     disabled={uploadMutation.isPending}
                     data-testid="input-file-upload"
@@ -212,16 +212,16 @@ export default function FileUpload() {
                     <div className="flex items-start gap-2">
                       <CheckCircle className="h-4 w-4 text-blue-600 mt-0.5" />
                       <div className="text-sm">
-                        <p className="font-medium text-blue-800">Intelligent One-Row Processing</p>
+                        <p className="font-medium text-blue-800">Intelligent One-Row Processing with PDF Support</p>
                         <p className="text-blue-700">
-                          Our system automatically extracts complete NPT reports from each billing row, including:
+                          Our system automatically extracts complete NPT reports from each billing row in Excel, CSV or PDF files, including:
                           system identification, equipment failures, causes, actions, and proper classification.
                         </p>
                       </div>
                     </div>
                   </div>
                   <p className="text-sm text-gray-500">
-                    Supported formats: CSV, Excel (.xlsx, .xls), Text files
+                    Supported formats: CSV, Excel (.xlsx, .xls), Text files, PDF
                   </p>
                 </div>
 

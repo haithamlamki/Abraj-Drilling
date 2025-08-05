@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { BillingProcessor } from "./billingProcessor";
+import { processPDFBilling, enhanceBillingRowWithNPTData } from "./pdfProcessor";
 import { insertNptReportSchema, insertSystemSchema, insertEquipmentSchema, insertDepartmentSchema, insertActionPartySchema } from "@shared/schema";
 import type { BillingSheetRow } from "@shared/billingTypes";
 import { z } from "zod";
@@ -252,7 +253,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Convert hours to string for database storage
-      const dataToUpdate = { ...validatedData };
+      const dataToUpdate: any = { ...validatedData };
       if (dataToUpdate.hours !== undefined) {
         dataToUpdate.hours = dataToUpdate.hours.toString();
       }
@@ -465,10 +466,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const userId = req.user.claims.sub;
       const fileName = req.file.originalname;
-      const fileContent = req.file.buffer.toString('utf-8');
+      const fileExtension = fileName.toLowerCase().split('.').pop();
 
-      const billingProcessor = new BillingProcessor();
-      const result = await billingProcessor.processBillingSheet(fileName, fileContent);
+      let result;
+      
+      if (fileExtension === 'pdf') {
+        // Process PDF file
+        const { rows, metadata } = await processPDFBilling(req.file.buffer);
+        
+        // Enhance rows with NPT data
+        const enhancedRows = rows.map(row => enhanceBillingRowWithNPTData(row));
+        
+        result = {
+          fileName,
+          totalRows: rows.length,
+          processedRows: enhancedRows.length,
+          errors: [],
+          extractedData: enhancedRows,
+          recognitionSummary: {
+            repairRateRows: enhancedRows.filter(r => r.rateType === 'Repair Rate').length,
+            reducedRateRows: enhancedRows.filter(r => r.rateType === 'Reduce Repair Rate').length,
+            zeroRateRows: enhancedRows.filter(r => r.rateType === 'Zero Rate').length,
+            contractualRows: enhancedRows.filter(r => r.nbtType === 'Contractual').length,
+            abroadRows: enhancedRows.filter(r => r.nbtType === 'Abroad').length,
+          }
+        };
+      } else {
+        // Process Excel/CSV file
+        const fileContent = req.file.buffer.toString('utf-8');
+        const billingProcessor = new BillingProcessor();
+        result = await billingProcessor.processBillingSheet(fileName, fileContent);
+      }
 
       // Store upload record
       await storage.saveBillingUpload({
@@ -541,7 +569,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               parentEquipment: row.extractedEquipment || null,
               partEquipment: row.extractedFailure || null,
               contractualProcess: row.nbtType === 'Contractual' ? row.description : null,
-              immediateCause: row.nbtType === 'Abraj' ? row.description : null,
+              immediateCause: row.nbtType === 'Abroad' ? row.description : null,
               wellName: null,  
               userId: user.id,
               status: 'Draft' as const
