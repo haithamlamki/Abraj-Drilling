@@ -180,18 +180,22 @@ IMPORTANT: Include ALL entries, even those with:
 - Entries that may appear in compact or condensed format
 
 Important NBT classification rules:
-1. The following rate types are ALL classified as "Abraj" NBT:
+1. The following rate types are classified as "Abraj" NBT:
    - ZERO RATE
-   - BREAKDOWN RATE (distinct from REDUCE REPAIR RATE)
-   - REDUCE REPAIR RATE (sometimes appears as REDUCED REPAIR RATE)
-   - REPAIR RATE
+   - BREAKDOWN RATE
+   - REPAIR RATE (but NOT REDUCE REPAIR RATE)
    - REPAIR RATE T4
-   Important: Extract the exact rate type name as it appears in the PDF. Don't confuse:
-   - "BREAKDOWN RATE" is its own rate type
-   - "REDUCE REPAIR RATE" or "REDUCED REPAIR RATE" is a separate rate type
-2. "Contractual" NBT includes: RIG MOVE, LOGGING, SERVICE, etc.
+2. The following rate types are classified as "Contractual" NBT:
+   - REDUCE RATE (any variation)
+   - REDUCE REPAIR RATE
+   - REDUCED REPAIR RATE
+   - RIG MOVE
+   - LOGGING
+   - SERVICE
+   - Any other contractual activities
 3. Operating Rate is productive time - do not include these rows
 4. Extract the ticket number if present (format: DR + numbers)
+5. Extract the exact rate type name as it appears in the PDF
 
 Carefully scan the entire PDF for ALL non-productive time entries. Look for columns that show hours with rate types.
 
