@@ -45,6 +45,12 @@ export default function Sidebar() {
       visible: user?.role === 'admin' || user?.role === 'supervisor',
     },
     {
+      href: "/pending-approvals",
+      icon: "fas fa-clock",
+      label: "Workflow Approvals",
+      visible: ['tool_pusher', 'ds', 'ose', 'pme', 'admin', 'supervisor'].includes(user?.role || ''),
+    },
+    {
       href: "/settings",
       icon: "fas fa-cog",
       label: "Settings",

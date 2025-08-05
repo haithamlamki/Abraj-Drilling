@@ -4,6 +4,7 @@ import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { BillingProcessor } from "./billingProcessor";
 import { processPDFBilling, enhanceBillingRowWithNPTData } from "./pdfProcessor";
+import { workflowService } from "./workflowService";
 import { insertNptReportSchema, insertSystemSchema, insertEquipmentSchema, insertDepartmentSchema, insertActionPartySchema } from "@shared/schema";
 import type { BillingSheetRow } from "@shared/billingTypes";
 import { z } from "zod";
@@ -873,52 +874,98 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Approval workflow endpoints
-  app.post('/api/npt-reports/:id/approve', isAuthenticated, async (req: any, res) => {
+  // Workflow endpoints
+  app.post('/api/npt-reports/:id/initiate-workflow', isAuthenticated, async (req: any, res) => {
     try {
       const reportId = parseInt(req.params.id);
       const userId = req.user.claims.sub;
       const user = await storage.getUser(userId);
-
-      if (user?.role !== 'admin' && user?.role !== 'supervisor') {
-        return res.status(403).json({ message: "Only administrators and supervisors can approve reports" });
+      
+      if (!user) {
+        return res.status(403).json({ message: "User not found" });
       }
 
-      await storage.updateNptReport(reportId, {
-        status: 'Approved'
-      });
+      const report = await storage.getNptReport(reportId);
+      if (!report) {
+        return res.status(404).json({ message: "Report not found" });
+      }
 
-      res.json({ message: "Report approved successfully" });
+      // Only Tool Pushers can initiate workflow
+      if (user.role !== 'tool_pusher') {
+        return res.status(403).json({ message: "Only Tool Pushers can initiate workflow" });
+      }
+
+      await workflowService.initiateWorkflow(reportId, userId);
+      res.json({ message: "Workflow initiated successfully" });
     } catch (error) {
-      console.error("Error approving report:", error);
-      res.status(500).json({ message: "Failed to approve report" });
+      console.error("Error initiating workflow:", error);
+      res.status(500).json({ message: "Failed to initiate workflow" });
     }
   });
 
-  app.post('/api/npt-reports/:id/reject', isAuthenticated, async (req: any, res) => {
+  app.post('/api/npt-reports/:id/workflow-action', isAuthenticated, async (req: any, res) => {
     try {
       const reportId = parseInt(req.params.id);
-      const { reason } = req.body;
+      const { action, comments, editedData } = req.body;
       const userId = req.user.claims.sub;
       const user = await storage.getUser(userId);
-
-      if (user?.role !== 'admin' && user?.role !== 'supervisor') {
-        return res.status(403).json({ message: "Only administrators and supervisors can reject reports" });
+      
+      if (!user) {
+        return res.status(403).json({ message: "User not found" });
       }
 
-      if (!reason?.trim()) {
-        return res.status(400).json({ message: "Rejection reason is required" });
+      const report = await storage.getNptReport(reportId);
+      if (!report) {
+        return res.status(404).json({ message: "Report not found" });
       }
 
-      await storage.updateNptReport(reportId, {
-        status: 'Rejected',
-        rejectionReason: reason
-      });
+      // Check if user can perform action
+      const canPerform = await workflowService.canUserPerformAction(report, user.role || '');
+      if (!canPerform) {
+        return res.status(403).json({ message: "You cannot perform actions on this report at this stage" });
+      }
 
-      res.json({ message: "Report rejected successfully" });
+      await workflowService.processWorkflowAction(
+        reportId,
+        userId,
+        user.role || '',
+        action,
+        comments,
+        editedData
+      );
+
+      res.json({ message: `Report ${action}ed successfully` });
     } catch (error) {
-      console.error("Error rejecting report:", error);
-      res.status(500).json({ message: "Failed to reject report" });
+      console.error("Error processing workflow action:", error);
+      res.status(500).json({ message: "Failed to process workflow action" });
+    }
+  });
+
+  app.get('/api/npt-reports/pending-approval', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (!user) {
+        return res.status(403).json({ message: "User not found" });
+      }
+
+      const reports = await storage.getReportsByApprover(user.role || '');
+      res.json(reports);
+    } catch (error) {
+      console.error("Error fetching pending reports:", error);
+      res.status(500).json({ message: "Failed to fetch pending reports" });
+    }
+  });
+
+  app.get('/api/npt-reports/:id/workflow-history', isAuthenticated, async (req: any, res) => {
+    try {
+      const reportId = parseInt(req.params.id);
+      const approvals = await storage.getWorkflowApprovals(reportId);
+      res.json(approvals);
+    } catch (error) {
+      console.error("Error fetching workflow history:", error);
+      res.status(500).json({ message: "Failed to fetch workflow history" });
     }
   });
 

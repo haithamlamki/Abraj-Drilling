@@ -10,6 +10,8 @@ import NptReports from "@/pages/npt-reports";
 import NptReportsBulk from "@/pages/npt-reports-bulk";
 import FileUpload from "@/pages/file-upload";
 import Approvals from "@/pages/approvals";
+import PendingApprovals from "@/pages/pending-approvals";
+import NptReportDetail from "@/pages/npt-report-detail";
 import Settings from "@/pages/settings";
 import Reports from "@/pages/reports";
 import NotFound from "@/pages/not-found";
@@ -25,9 +27,11 @@ function Router() {
         <>
           <Route path="/" component={Dashboard} />
           <Route path="/npt-reports" component={NptReports} />
+          <Route path="/npt-reports/:id" component={NptReportDetail} />
           <Route path="/npt-reports-bulk" component={NptReportsBulk} />
           <Route path="/file-upload" component={FileUpload} />
           <Route path="/approvals" component={Approvals} />
+          <Route path="/pending-approvals" component={PendingApprovals} />
           <Route path="/reports" component={Reports} />
           <Route path="/settings" component={Settings} />
         </>

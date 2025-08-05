@@ -84,9 +84,31 @@ export const nptReports = pgTable("npt_reports", {
   wellName: varchar("well_name"),
   status: varchar("status").default('Draft'), // Draft, Pending Review, Approved, Rejected
   rejectionReason: text("rejection_reason"),
+  // Workflow fields
+  workflowStatus: varchar("workflow_status").default('initiated'), // initiated, pending_ds, pending_pme, pending_ose, approved, rejected
+  currentApprover: varchar("current_approver"), // Current role waiting for approval
+  workflowPath: varchar("workflow_path"), // drilling or e-maintenance
+  initiatedBy: varchar("initiated_by").references(() => users.id),
+  initiatedAt: timestamp("initiated_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
+
+// Workflow Approvals table
+export const workflowApprovals = pgTable("workflow_approvals", {
+  id: serial("id").primaryKey(),
+  reportId: integer("report_id").references(() => nptReports.id).notNull(),
+  approverId: varchar("approver_id").references(() => users.id).notNull(),
+  approverRole: varchar("approver_role").notNull(), // tool_pusher, ds, pme, ose
+  action: varchar("action").notNull(), // approve, reject, edit
+  comments: text("comments"),
+  editedFields: jsonb("edited_fields"), // Track which fields were edited
+  previousValues: jsonb("previous_values"), // Store previous values before edit
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_workflow_approvals_report").on(table.reportId),
+  index("idx_workflow_approvals_approver").on(table.approverId),
+]);
 
 // Reference data tables
 export const systems = pgTable("systems", {
@@ -193,6 +215,8 @@ export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type Rig = typeof rigs.$inferSelect;
 export type InsertRig = z.infer<typeof insertRigSchema>;
+export type WorkflowApproval = typeof workflowApprovals.$inferSelect;
+export type InsertWorkflowApproval = typeof workflowApprovals.$inferInsert;
 export type NptReport = typeof nptReports.$inferSelect;
 export type InsertNptReport = z.infer<typeof insertNptReportSchema>;
 export type System = typeof systems.$inferSelect;

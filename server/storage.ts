@@ -7,6 +7,7 @@ import {
   equipment,
   departments,
   actionParties,
+  workflowApprovals,
   type User,
   type UpsertUser,
   type Rig,
@@ -21,6 +22,8 @@ import {
   type InsertDepartment,
   type ActionParty,
   type InsertActionParty,
+  type WorkflowApproval,
+  type InsertWorkflowApproval,
 } from "@shared/schema";
 import type { BillingSheetUpload, BillingUploadResult } from "@shared/billingTypes";
 import { db } from "./db";
@@ -74,6 +77,11 @@ export interface IStorage {
   getActionParties(): Promise<ActionParty[]>;
   createActionParty(actionParty: InsertActionParty): Promise<ActionParty>;
   deleteActionParty(id: number): Promise<void>;
+  
+  // Workflow operations
+  createWorkflowApproval(approval: Partial<InsertWorkflowApproval>): Promise<WorkflowApproval>;
+  getWorkflowApprovals(reportId: number): Promise<WorkflowApproval[]>;
+  getReportsByApprover(approverRole: string): Promise<NptReport[]>;
   
   // Billing upload operations
   saveBillingUpload(upload: { fileName: string; uploadedBy: string; status: string; result: BillingUploadResult }): Promise<void>;
@@ -362,6 +370,27 @@ export class DatabaseStorage implements IStorage {
   
   async deleteActionParty(id: number): Promise<void> {
     await db.update(actionParties).set({ isActive: false }).where(eq(actionParties.id, id));
+  }
+  
+  // Workflow operations
+  async createWorkflowApproval(approval: Partial<InsertWorkflowApproval>): Promise<WorkflowApproval> {
+    const [newApproval] = await db.insert(workflowApprovals).values(approval as InsertWorkflowApproval).returning();
+    return newApproval;
+  }
+  
+  async getWorkflowApprovals(reportId: number): Promise<WorkflowApproval[]> {
+    return await db
+      .select()
+      .from(workflowApprovals)
+      .where(eq(workflowApprovals.reportId, reportId))
+      .orderBy(workflowApprovals.createdAt);
+  }
+  
+  async getReportsByApprover(approverRole: string): Promise<NptReport[]> {
+    return await db
+      .select()
+      .from(nptReports)
+      .where(eq(nptReports.currentApprover, approverRole));
   }
 
   // Billing upload operations
