@@ -220,13 +220,13 @@ export default function FileUpload() {
                       </div>
                     </div>
                   </div>
-                  <div className="bg-amber-50 p-3 rounded-lg border border-amber-200 mt-2">
+                  <div className="bg-green-50 p-3 rounded-lg border border-green-200 mt-2">
                     <div className="flex items-start gap-2">
-                      <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5" />
+                      <CheckCircle className="h-4 w-4 text-green-600 mt-0.5" />
                       <div className="text-sm">
-                        <p className="font-medium text-amber-800">PDF Processing Note</p>
-                        <p className="text-amber-700">
-                          PDF files will use demonstration data to show system functionality. For production use, integrate with a PDF parsing service.
+                        <p className="font-medium text-green-800">AI-Powered PDF Processing</p>
+                        <p className="text-green-700">
+                          PDF files are processed using OpenAI's advanced vision AI to extract billing data, classify NBT types, and identify equipment details automatically.
                         </p>
                       </div>
                     </div>
