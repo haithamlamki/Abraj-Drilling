@@ -126,7 +126,7 @@ export default function NptFormMulti() {
       reports.push(baseValues);
     } else {
       // Create a row for each day of the current month
-      for (let day = 1; day <= Math.min(daysInMonth, 10); day++) { // Limit to 10 for performance
+      for (let day = 1; day <= daysInMonth; day++) {
         const date = new Date(currentYear, currentDate.getMonth(), day);
         reports.push(createDefaultRow(date));
       }
@@ -277,9 +277,9 @@ export default function NptFormMulti() {
             {/* Excel-style Table */}
             <div className="border border-gray-300 rounded-lg overflow-x-auto">
               {/* Column Headers */}
-              <div className="bg-gray-100 border-b border-gray-300">
-                <div className="min-w-[2000px] grid grid-cols-[auto,repeat(19,minmax(0,1fr))] gap-0 text-xs font-medium text-gray-700">
-                  <div className="p-2 border-r border-gray-300 text-center w-24">Actions</div>
+              <div className="bg-gray-100 border-b border-gray-300 min-w-[2200px]">
+                <div className="grid grid-cols-[100px_repeat(19,1fr)] gap-0 text-xs font-medium text-gray-700">
+                  <div className="p-2 border-r border-gray-300 text-center">Actions</div>
                   <div className="p-2 border-r border-gray-300 text-center">A<br/>Rig Number</div>
                   <div className="p-2 border-r border-gray-300 text-center">B<br/>Year</div>
                   <div className="p-2 border-r border-gray-300 text-center">C<br/>Month</div>
@@ -303,7 +303,7 @@ export default function NptFormMulti() {
               </div>
 
               {/* Data Rows */}
-              <div className="bg-white">
+              <div className="bg-white max-h-[600px] overflow-y-auto">
                 {fields.map((field, index) => {
                   const selectedDate = form.watch(`reports.${index}.date`);
                   const selectedNptType = form.watch(`reports.${index}.nptType`);
@@ -311,7 +311,7 @@ export default function NptFormMulti() {
                   const month = selectedDate ? new Date(selectedDate).toLocaleDateString('en-US', { month: 'short' }) : "";
 
                   return (
-                    <div key={field.id} className="min-w-[2000px] grid grid-cols-[auto,repeat(19,minmax(0,1fr))] gap-0 text-xs border-b border-gray-200">
+                    <div key={field.id} className="min-w-[2200px] grid grid-cols-[100px_repeat(19,1fr)] gap-0 text-xs border-b border-gray-200">
                       {/* Action Buttons */}
                       <div className="p-1 border-r border-gray-200 flex items-center justify-center gap-1">
                         <Button
