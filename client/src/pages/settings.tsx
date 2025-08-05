@@ -58,8 +58,11 @@ export default function SettingsPage() {
     location: string;
   } | null>(null);
   
-  // Custom roles
-  const [customRoles, setCustomRoles] = useState<string[]>([]);
+  // Custom roles - load from localStorage on mount
+  const [customRoles, setCustomRoles] = useState<string[]>(() => {
+    const saved = localStorage.getItem('customRoles');
+    return saved ? JSON.parse(saved) : [];
+  });
   const [showAddRoleDialog, setShowAddRoleDialog] = useState(false);
   const [newRoleName, setNewRoleName] = useState("");
   
@@ -974,6 +977,11 @@ export default function SettingsPage() {
                                 <SelectItem value="admin">Admin</SelectItem>
                                 <SelectItem value="supervisor">Supervisor</SelectItem>
                                 <SelectItem value="drilling_manager">Drilling Manager</SelectItem>
+                                {customRoles.map((role) => (
+                                  <SelectItem key={role} value={role}>
+                                    {role}
+                                  </SelectItem>
+                                ))}
                               </SelectContent>
                             </Select>
                           </div>
@@ -1458,7 +1466,9 @@ export default function SettingsPage() {
                           onChange={(e) => setNewRoleName(e.target.value)}
                           onKeyPress={(e) => {
                             if (e.key === 'Enter' && newRoleName.trim()) {
-                              setCustomRoles([...customRoles, newRoleName.trim()]);
+                              const updatedRoles = [...customRoles, newRoleName.trim()];
+                              setCustomRoles(updatedRoles);
+                              localStorage.setItem('customRoles', JSON.stringify(updatedRoles));
                               setNewRoleName("");
                               toast({ title: "Success", description: `Custom role "${newRoleName}" added successfully` });
                             }
@@ -1468,7 +1478,9 @@ export default function SettingsPage() {
                         <Button
                           onClick={() => {
                             if (newRoleName.trim()) {
-                              setCustomRoles([...customRoles, newRoleName.trim()]);
+                              const updatedRoles = [...customRoles, newRoleName.trim()];
+                              setCustomRoles(updatedRoles);
+                              localStorage.setItem('customRoles', JSON.stringify(updatedRoles));
                               setNewRoleName("");
                               toast({ title: "Success", description: `Custom role "${newRoleName}" added successfully` });
                             }
@@ -1488,7 +1500,9 @@ export default function SettingsPage() {
                               size="sm"
                               className="ml-2 h-4 w-4 p-0"
                               onClick={() => {
-                                setCustomRoles(customRoles.filter((_, i) => i !== index));
+                                const updatedRoles = customRoles.filter((_, i) => i !== index);
+                                setCustomRoles(updatedRoles);
+                                localStorage.setItem('customRoles', JSON.stringify(updatedRoles));
                                 toast({ title: "Success", description: `Custom role "${role}" removed` });
                               }}
                             >
