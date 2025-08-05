@@ -162,8 +162,10 @@ export default function FileUpload() {
   };
 
   const handleCreateReports = () => {
-    if (currentResult?.extractedData) {
-      createReportsMutation.mutate(currentResult.extractedData);
+    if (currentResult?.extractedData && currentResult.extractedData.length > 0) {
+      // Store data in session storage and navigate to bulk NPT form
+      sessionStorage.setItem('allBillingData', JSON.stringify(currentResult.extractedData));
+      setLocation('/npt-reports-bulk');
     }
   };
 

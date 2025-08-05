@@ -33,7 +33,11 @@ The platform serves different user roles (drilling managers, supervisors, and ad
   - Automatic category detection with intelligent matching
 - **Ticket Number Extraction**: Rig number is extracted from ticket number format (e.g., DR20320250529202901 → Rig 203)
 - **Operating Rate Filtering**: Operating Rate entries are automatically filtered out and do not generate NPT reports
-- **Bulk NPT Creation from Billing**: When clicking "Create NPT Reports" from billing upload, the system creates ALL NPT reports at once from the extracted billing data (e.g., creates 6 reports from 6 rows) and navigates to the dashboard
+- **Multi-Row NPT Review from Billing**: When clicking "Create NPT Reports" from billing upload, the system navigates to a multi-row form where users can review and edit all extracted data before creating NPT reports. Users can:
+  - View all extracted rows in an Excel-like table format
+  - Edit any field before saving
+  - Remove rows they don't want to create
+  - Save all reports at once after review
 
 ## User Preferences
 

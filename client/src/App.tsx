@@ -7,6 +7,7 @@ import { useAuth } from "@/hooks/useAuth";
 import Landing from "@/pages/landing";
 import Dashboard from "@/pages/dashboard";
 import NptReports from "@/pages/npt-reports";
+import NptReportsBulk from "@/pages/npt-reports-bulk";
 import FileUpload from "@/pages/file-upload";
 import Approvals from "@/pages/approvals";
 import Settings from "@/pages/settings";
@@ -24,6 +25,7 @@ function Router() {
         <>
           <Route path="/" component={Dashboard} />
           <Route path="/npt-reports" component={NptReports} />
+          <Route path="/npt-reports-bulk" component={NptReportsBulk} />
           <Route path="/file-upload" component={FileUpload} />
           <Route path="/approvals" component={Approvals} />
           <Route path="/reports" component={Reports} />
