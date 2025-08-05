@@ -8,6 +8,7 @@ export interface BillingSheetRow {
   nbtType: 'Abroad' | 'Contractual';
   rateType: 'Repair Rate' | 'Reduce Repair Rate' | 'Zero Rate' | 'Operation Rate' | 'Operating Rate' | 'Reduced Rate' | 'Rig Move Statistical' | 'Other';
   description: string;
+  wellName?: string;
   extractedEquipment?: string;
   extractedSystem?: string;
   extractedFailure?: string;

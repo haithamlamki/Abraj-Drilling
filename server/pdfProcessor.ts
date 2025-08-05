@@ -259,6 +259,7 @@ ${extractedText}`
         nbtType: row.nbtType || 'Contractual',
         rateType: row.rateType,
         description: row.description,
+        wellName: metadata.well || 'BRN-96',
         extractedSystem: row.nbtType === 'Contractual' ? extractedSystem : undefined,
         extractedEquipment: undefined,
         extractedFailure: undefined,

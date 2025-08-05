@@ -354,7 +354,7 @@ export default function FileUpload() {
                   {currentResult.extractedData.length > 0 && (
                     <div className="space-y-4">
                       <div className="flex items-center justify-between">
-                        <h4 className="font-semibold">Intelligent Extraction Results - Preview (First 5 rows)</h4>
+                        <h4 className="font-semibold">Intelligent Extraction Results</h4>
                         <p className="text-sm text-gray-500">
                           {currentResult.extractedData.length} total rows extracted
                         </p>
@@ -373,10 +373,11 @@ export default function FileUpload() {
                               <th className="border border-gray-300 p-2 text-left text-xs">Equipment</th>
                               <th className="border border-gray-300 p-2 text-left text-xs">Confidence</th>
                               <th className="border border-gray-300 p-2 text-left text-xs">Description</th>
+                              <th className="border border-gray-300 p-2 text-left text-xs">Well Name</th>
                             </tr>
                           </thead>
                           <tbody>
-                            {currentResult.extractedData.slice(0, 5).map((row, index) => (
+                            {currentResult.extractedData.map((row, index) => (
                               <tr key={index} className="hover:bg-gray-50">
                                 <td className="border border-gray-300 p-2 font-medium">{row.rigNumber}</td>
                                 <td className="border border-gray-300 p-2 text-sm">
@@ -415,6 +416,9 @@ export default function FileUpload() {
                                 <td className="border border-gray-300 p-2 max-w-xs truncate text-sm" title={row.description}>
                                   {row.description}
                                 </td>
+                                <td className="border border-gray-300 p-2 text-sm font-medium">
+                                  {row.wellName || 'BRN-96'}
+                                </td>
                               </tr>
                             ))}
                           </tbody>
@@ -428,7 +432,7 @@ export default function FileUpload() {
                           onClick={() => {
                             // Export to CSV functionality
                             const csvContent = [
-                              ['Date', 'Rig', 'Year', 'Month', 'Hours', 'NBT Type', 'Rate Type', 'System', 'Equipment', 'Confidence %', 'Description'],
+                              ['Date', 'Rig', 'Year', 'Month', 'Hours', 'NBT Type', 'Rate Type', 'System', 'Equipment', 'Confidence %', 'Description', 'Well Name'],
                               ...currentResult.extractedData.map(row => [
                                 new Date(row.date).toLocaleDateString(),
                                 row.rigNumber,
@@ -440,7 +444,8 @@ export default function FileUpload() {
                                 row.extractedSystem || '',
                                 row.extractedEquipment || '',
                                 Math.round((row.confidence || 0) * 100),
-                                row.description.replace(/,/g, ';') // Replace commas to avoid CSV issues
+                                row.description.replace(/,/g, ';'), // Replace commas to avoid CSV issues
+                                row.wellName || 'BRN-96'
                               ])
                             ].map(row => row.join(',')).join('\n');
                             

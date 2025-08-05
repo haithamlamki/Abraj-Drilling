@@ -233,6 +233,7 @@ export class BillingProcessor {
       nbtType,
       rateType,
       description,
+      wellName: 'BRN-96', // Default well name for Excel files
       extractedEquipment: equipmentData.equipment,
       extractedSystem: equipmentData.system,
       extractedFailure,
