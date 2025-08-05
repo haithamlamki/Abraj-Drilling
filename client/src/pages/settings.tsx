@@ -49,6 +49,7 @@ export default function SettingsPage() {
     firstName: string;
     role: string;
     rigId: number | null;
+    rigIds: number[];
   } | null>(null);
   const [editingRigData, setEditingRigData] = useState<{
     rigNumber: number;
@@ -1108,7 +1109,8 @@ export default function SettingsPage() {
                                         email: currentUserData.email || "",
                                         firstName: currentUserData.firstName || "",
                                         role: currentUserData.role,
-                                        rigId: currentUserData.rigId
+                                        rigId: currentUserData.rigId,
+                                        rigIds: userRigIds
                                       });
                                     }}
                                   >
@@ -1156,20 +1158,58 @@ export default function SettingsPage() {
                               </TableCell>
                               <TableCell>
                                 {isEditing ? (
-                                  <Select
-                                    value={editingUserData?.rigId?.toString() || "none"}
-                                    onValueChange={(value) => setEditingUserData({...editingUserData!, rigId: value === "none" ? null : parseInt(value)})}
-                                  >
+                                  <Select>
                                     <SelectTrigger className="h-8 w-32">
-                                      <SelectValue />
+                                      <SelectValue placeholder={
+                                        editingUserData?.rigIds.length === 0 
+                                          ? "Select rigs" 
+                                          : editingUserData?.rigIds.length === rigs.length 
+                                            ? "All Rigs" 
+                                            : `${editingUserData?.rigIds.length} rig(s)`
+                                      } />
                                     </SelectTrigger>
                                     <SelectContent>
-                                      <SelectItem value="none">No Rig</SelectItem>
-                                      {rigs.map((rig) => (
-                                        <SelectItem key={rig.id} value={rig.id.toString()}>
-                                          Rig {rig.rigNumber}
-                                        </SelectItem>
-                                      ))}
+                                      <ScrollArea className="h-[200px]">
+                                        <div className="p-2">
+                                          <div 
+                                            className="flex items-center space-x-2 mb-2 pb-2 border-b cursor-pointer hover:bg-accent p-2 rounded"
+                                            onClick={() => {
+                                              if (editingUserData?.rigIds.length === rigs.length) {
+                                                setEditingUserData({ ...editingUserData!, rigIds: [] });
+                                              } else {
+                                                setEditingUserData({ ...editingUserData!, rigIds: rigs.map(r => r.id) });
+                                              }
+                                            }}
+                                          >
+                                            <Checkbox 
+                                              checked={editingUserData?.rigIds.length === rigs.length}
+                                              onCheckedChange={() => {}}
+                                            />
+                                            <span className="font-medium">All Rigs</span>
+                                          </div>
+                                          {rigs.map((rig) => (
+                                            <div 
+                                              key={rig.id} 
+                                              className="flex items-center space-x-2 cursor-pointer hover:bg-accent p-2 rounded"
+                                              onClick={() => {
+                                                const isSelected = editingUserData?.rigIds.includes(rig.id);
+                                                setEditingUserData({
+                                                  ...editingUserData!,
+                                                  rigIds: isSelected 
+                                                    ? editingUserData?.rigIds.filter(id => id !== rig.id) || []
+                                                    : [...(editingUserData?.rigIds || []), rig.id]
+                                                });
+                                              }}
+                                            >
+                                              <Checkbox 
+                                                checked={editingUserData?.rigIds.includes(rig.id)}
+                                                onCheckedChange={() => {}}
+                                              />
+                                              <span>Rig {rig.rigNumber}</span>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </ScrollArea>
                                     </SelectContent>
                                   </Select>
                                 ) : (

@@ -66,10 +66,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const { id } = req.params;
-      const updateData = req.body;
+      const { rigIds, ...updateData } = req.body;
       
+      // Update user data
       const updatedUser = await storage.updateUser(id, updateData);
-      res.json(updatedUser);
+      
+      // Update rig assignments if provided
+      if (rigIds !== undefined) {
+        await storage.assignUserToRigs(id, rigIds);
+      }
+      
+      // Return user with their assigned rigs
+      const userRigIds = await storage.getUserRigs(id);
+      res.json({ ...updatedUser, rigIds: userRigIds });
     } catch (error) {
       console.error("Error updating user:", error);
       res.status(500).json({ message: "Failed to update user" });
