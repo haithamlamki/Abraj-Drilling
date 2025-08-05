@@ -370,6 +370,12 @@ export class BillingProcessor {
   private extractEquipment(description: string): { system?: string; equipment?: string } {
     const lowerDesc = description.toLowerCase();
     
+    // First check if it's a Contractual category
+    const contractualCategory = this.matchContractualCategory(description);
+    if (contractualCategory) {
+      return { system: contractualCategory };
+    }
+    
     // Search through system equipment map for best match
     for (const [system, equipmentList] of Object.entries(this.systemEquipmentMap)) {
       for (const equipment of equipmentList) {
@@ -430,9 +436,12 @@ export class BillingProcessor {
     };
 
     if (data.nbtType === 'Contractual') {
+      // Check if description matches any Contractual category
+      const contractualCategory = this.matchContractualCategory(data.description);
       return {
         ...baseData,
-        contractualProcess: this.extractContractualProcess(data.description, data.rateType)
+        contractualProcess: data.description, // Full description goes to contractual column
+        system: contractualCategory || data.system // Category name goes to system column
       };
     } else {
       // Abraj NPT data
@@ -606,5 +615,62 @@ export class BillingProcessor {
 
   private shouldRequireNotification(hours: number): boolean {
     return hours >= 2.0 && hours <= 5.75;
+  }
+
+  // Check if description matches any Contractual category
+  private matchContractualCategory(description: string): string | undefined {
+    const lowerDesc = description.toLowerCase();
+    
+    // Define all 29 Contractual categories
+    const contractualCategories = [
+      'Annual Maintenance',
+      'BOP',
+      'Camp',
+      'CAT IV',
+      'Cementing',
+      'Circulating System',
+      'Drawworks',
+      'Drill line',
+      'Drill String',
+      'Eid Break',
+      'Events',
+      'Handling System',
+      'Hoisting & Lifting',
+      'HSE',
+      'Human Factor',
+      'Instrumentation',
+      'Logging',
+      'Moving System',
+      'Pipe Cat',
+      'Power System',
+      'Ramadan Break',
+      'Rig move',
+      'Service',
+      'Service TDS',
+      'Structure',
+      'Top Drive',
+      'Waiting',
+      'Weather',
+      'Well Control'
+    ];
+    
+    for (const category of contractualCategories) {
+      if (lowerDesc.includes(category.toLowerCase())) {
+        return category;
+      }
+    }
+    
+    // Check for variations
+    if (lowerDesc.includes('rig move') || lowerDesc.includes('rig down') || 
+        lowerDesc.includes('raising the mast') || lowerDesc.includes('general rig down')) {
+      return 'Rig move';
+    }
+    
+    if (lowerDesc.includes('logging') || lowerDesc.includes('wl logging') || 
+        lowerDesc.includes('cbr') || lowerDesc.includes('vdl')) {
+      return 'Logging';
+    }
+    
+    return undefined;
   }
 }

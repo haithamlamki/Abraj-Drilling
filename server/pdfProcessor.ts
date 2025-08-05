@@ -113,8 +113,8 @@ async function extractBillingDataFromPDF(buffer: Buffer): Promise<BillingSheetRo
       hours: 3,
       nbtType: 'Contractual',
       rateType: 'Reduced Rate',
-      description: 'Logging',
-      extractedSystem: undefined,
+      description: 'Cont. POOH 12.25" Baker PDC bit packed BHA on 5" DP stands from 1069 m to surface. Perform RAY CBL-VDL-GR-CCL WL logging.',
+      extractedSystem: 'Logging',
       extractedEquipment: undefined,
       extractedFailure: undefined,
       nptReportData: {
@@ -122,7 +122,8 @@ async function extractBillingDataFromPDF(buffer: Buffer): Promise<BillingSheetRo
         date: '2025-05-22',
         hours: 3,
         nptType: 'Contractual',
-        contractualProcess: 'Logging',
+        contractualProcess: 'Cont. POOH 12.25" Baker PDC bit packed BHA on 5" DP stands from 1069 m to surface. Perform RAY CBL-VDL-GR-CCL WL logging.',
+        system: 'Logging',
         status: 'Draft'
       }
     },
@@ -136,7 +137,7 @@ async function extractBillingDataFromPDF(buffer: Buffer): Promise<BillingSheetRo
       nbtType: 'Contractual',
       rateType: 'Rig Move Statistical',
       description: 'Rig move',
-      extractedSystem: undefined,
+      extractedSystem: 'Rig move',
       extractedEquipment: undefined,
       extractedFailure: undefined,
       nptReportData: {
@@ -144,7 +145,8 @@ async function extractBillingDataFromPDF(buffer: Buffer): Promise<BillingSheetRo
         date: '2025-05-11',
         hours: 18,
         nptType: 'Contractual',
-        contractualProcess: 'Rig move',
+        contractualProcess: 'Rig Move',
+        system: 'Rig move',
         status: 'Draft'
       }
     },
@@ -157,7 +159,7 @@ async function extractBillingDataFromPDF(buffer: Buffer): Promise<BillingSheetRo
       nbtType: 'Contractual',
       rateType: 'Rig Move Statistical',
       description: 'Rig move',
-      extractedSystem: undefined,
+      extractedSystem: 'Rig move',
       extractedEquipment: undefined,
       extractedFailure: undefined,
       nptReportData: {
@@ -165,7 +167,8 @@ async function extractBillingDataFromPDF(buffer: Buffer): Promise<BillingSheetRo
         date: '2025-05-12',
         hours: 24,
         nptType: 'Contractual',
-        contractualProcess: 'Rig move',
+        contractualProcess: 'Rig Move',
+        system: 'Rig move',
         status: 'Draft'
       }
     },
@@ -178,7 +181,7 @@ async function extractBillingDataFromPDF(buffer: Buffer): Promise<BillingSheetRo
       nbtType: 'Contractual',
       rateType: 'Rig Move Statistical',
       description: 'Rig move',
-      extractedSystem: undefined,
+      extractedSystem: 'Rig move',
       extractedEquipment: undefined,
       extractedFailure: undefined,
       nptReportData: {
@@ -186,7 +189,8 @@ async function extractBillingDataFromPDF(buffer: Buffer): Promise<BillingSheetRo
         date: '2025-05-13',
         hours: 24,
         nptType: 'Contractual',
-        contractualProcess: 'Rig move',
+        contractualProcess: 'Rig Move',
+        system: 'Rig move',
         status: 'Draft'
       }
     },
@@ -199,7 +203,7 @@ async function extractBillingDataFromPDF(buffer: Buffer): Promise<BillingSheetRo
       nbtType: 'Contractual',
       rateType: 'Rig Move Statistical',
       description: 'Rig move',
-      extractedSystem: undefined,
+      extractedSystem: 'Rig move',
       extractedEquipment: undefined,
       extractedFailure: undefined,
       nptReportData: {
@@ -207,7 +211,8 @@ async function extractBillingDataFromPDF(buffer: Buffer): Promise<BillingSheetRo
         date: '2025-05-14',
         hours: 24,
         nptType: 'Contractual',
-        contractualProcess: 'Rig move',
+        contractualProcess: 'Rig Move',
+        system: 'Rig move',
         status: 'Draft'
       }
     },
@@ -220,7 +225,7 @@ async function extractBillingDataFromPDF(buffer: Buffer): Promise<BillingSheetRo
       nbtType: 'Contractual',
       rateType: 'Rig Move Statistical',
       description: 'Rig move',
-      extractedSystem: undefined,
+      extractedSystem: 'Rig move',
       extractedEquipment: undefined,
       extractedFailure: undefined,
       nptReportData: {
@@ -228,7 +233,8 @@ async function extractBillingDataFromPDF(buffer: Buffer): Promise<BillingSheetRo
         date: '2025-05-15',
         hours: 10,
         nptType: 'Contractual',
-        contractualProcess: 'Rig move',
+        contractualProcess: 'Rig Move',
+        system: 'Rig move',
         status: 'Draft'
       }
     }
@@ -397,13 +403,17 @@ function convertToBillingRow(parsed: ParsedBillingRow, metadata: any): BillingSh
   // Extract equipment and system from description
   const extraction = extractEquipmentAndSystem(parsed.description);
   
+  // For Contractual NBT, the system should be the contractual category
+  const system = contractualCategory || extraction.system;
+  
   // Create NPT report data
   const nptReportData = contractualCategory ? {
     rigId: metadata.rigNumber || '',
     date: parsedDate.toISOString().split('T')[0],
     hours: parsed.totalHours,
     nptType: 'Contractual' as const,
-    contractualProcess: contractualCategory,
+    contractualProcess: parsed.description, // Full description goes to contractual column
+    system: contractualCategory, // Category name goes to system column
     status: 'Draft' as const
   } : undefined;
   
@@ -416,7 +426,7 @@ function convertToBillingRow(parsed: ParsedBillingRow, metadata: any): BillingSh
     nbtType,
     rateType,
     description: parsed.description,
-    extractedSystem: extraction.system,
+    extractedSystem: system,
     extractedEquipment: extraction.equipment,
     extractedFailure: extraction.failure,
     nptReportData
