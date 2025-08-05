@@ -1,4 +1,5 @@
 import type { BillingSheetRow } from '@shared/billingTypes';
+import OpenAI from 'openai';
 
 interface ParsedBillingRow {
   date: string;
@@ -39,57 +40,8 @@ export async function processPDFBilling(buffer: Buffer): Promise<{
     throw new Error('Invalid PDF file');
   }
   
-  // For demonstration, return sample data structure
-  // In production, implement proper PDF parsing
-  console.log('PDF file detected. Size:', buffer.length, 'bytes');
-  
-  // Return sample billing data to demonstrate the system
-  const sampleRows: BillingSheetRow[] = [
-    {
-      date: new Date('2024-06-15'),
-      rigId: 96,
-      hours: 24,
-      nbtType: 'Abroad',
-      rateType: 'Repair Rate',
-      description: 'Top Drive maintenance - Replace bearing assembly due to excessive wear',
-      extractedSystem: 'Top Drive',
-      extractedEquipment: 'Bearing Assembly',
-      extractedFailure: 'Excessive wear'
-    },
-    {
-      date: new Date('2024-06-16'), 
-      rigId: 96,
-      hours: 12,
-      nbtType: 'Abroad',
-      rateType: 'Reduce Repair Rate',
-      description: 'Mud Pumps - Repair valve seat erosion',
-      extractedSystem: 'Mud Pumps',
-      extractedEquipment: 'Valve Seat',
-      extractedFailure: 'Erosion'
-    },
-    {
-      date: new Date('2024-06-17'),
-      rigId: 96, 
-      hours: 8,
-      nbtType: 'Contractual',
-      rateType: 'Operation Rate',
-      description: 'Waiting on weather - High winds',
-      extractedSystem: undefined,
-      extractedEquipment: undefined,
-      extractedFailure: undefined
-    }
-  ];
-  
-  return {
-    rows: sampleRows,
-    metadata: {
-      well: 'Sample Well BRN-96',
-      field: 'Sample Field',
-      rigNumber: '96',
-      jobStart: '2024-06-01',
-      jobEnd: '2024-06-30'
-    }
-  };
+  // Process PDF using OpenAI Vision API
+  const text = await extractTextFromPDF(buffer);
   
   // Extract metadata from header
   const metadata = extractMetadata(text);
