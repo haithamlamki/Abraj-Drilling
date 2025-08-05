@@ -1,6 +1,7 @@
 import {
   users,
   rigs,
+  userRigs,
   nptReports,
   systems,
   equipment,
@@ -32,6 +33,8 @@ export interface IStorage {
   getAllUsers(): Promise<User[]>;
   updateUser(id: string, updates: Partial<User>): Promise<User>;
   deleteUser(id: string): Promise<void>;
+  assignUserToRigs(userId: string, rigIds: number[]): Promise<void>;
+  getUserRigs(userId: string): Promise<number[]>;
   
   // Rig operations
   getRigs(): Promise<Rig[]>;
@@ -115,7 +118,32 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteUser(id: string): Promise<void> {
+    // Delete user-rig associations first
+    await db.delete(userRigs).where(eq(userRigs.userId, id));
+    // Then delete the user
     await db.delete(users).where(eq(users.id, id));
+  }
+
+  async assignUserToRigs(userId: string, rigIds: number[]): Promise<void> {
+    // Delete existing assignments
+    await db.delete(userRigs).where(eq(userRigs.userId, userId));
+    
+    // Add new assignments
+    if (rigIds.length > 0) {
+      const assignments = rigIds.map(rigId => ({
+        userId,
+        rigId
+      }));
+      await db.insert(userRigs).values(assignments);
+    }
+  }
+
+  async getUserRigs(userId: string): Promise<number[]> {
+    const assignments = await db
+      .select({ rigId: userRigs.rigId })
+      .from(userRigs)
+      .where(eq(userRigs.userId, userId));
+    return assignments.map(a => a.rigId);
   }
   
   // Rig operations

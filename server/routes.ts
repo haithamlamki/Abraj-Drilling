@@ -42,7 +42,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const users = await storage.getAllUsers();
-      res.json(users);
+      
+      // Add assigned rigs for each user
+      const usersWithRigs = await Promise.all(users.map(async (user) => {
+        const rigIds = await storage.getUserRigs(user.id);
+        return { ...user, rigIds };
+      }));
+      
+      res.json(usersWithRigs);
     } catch (error) {
       console.error("Error fetching users:", error);
       res.status(500).json({ message: "Failed to fetch users" });
@@ -102,10 +109,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Only admins can create users" });
       }
       
-      const { email, firstName, lastName, role, rigId } = req.body;
+      const { id, email, firstName, lastName, role, rigIds, departmentId } = req.body;
       
-      // Create a temporary user ID for the new user
-      const newUserId = `temp_${Date.now()}`;
+      // Use provided ID or create a temporary one
+      const newUserId = id || `temp_${Date.now()}`;
       
       const newUser = await storage.upsertUser({
         id: newUserId,
@@ -113,9 +120,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         firstName,
         lastName,
         role,
-        rigId,
+        rigId: rigIds && rigIds.length > 0 ? rigIds[0] : null, // Keep first rig for backward compatibility
         profileImageUrl: null,
       });
+      
+      // Add multiple rig assignments if provided
+      if (rigIds && rigIds.length > 0) {
+        await storage.assignUserToRigs(newUserId, rigIds);
+      }
       
       res.json(newUser);
     } catch (error) {

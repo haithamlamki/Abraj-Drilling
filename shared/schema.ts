@@ -34,7 +34,7 @@ export const users = pgTable("users", {
   lastName: varchar("last_name"),
   profileImageUrl: varchar("profile_image_url"),
   role: varchar("role").notNull().default("drilling_manager"), // admin, supervisor, drilling_manager
-  rigId: integer("rig_id").references(() => rigs.id),
+  rigId: integer("rig_id").references(() => rigs.id), // Kept for backward compatibility
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -49,6 +49,15 @@ export const rigs = pgTable("rigs", {
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
 });
+
+// User-Rig junction table for many-to-many relationship
+export const userRigs = pgTable("user_rigs", {
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  rigId: integer("rig_id").references(() => rigs.id).notNull(),
+}, (table) => [
+  index("idx_user_rigs_user").on(table.userId),
+  index("idx_user_rigs_rig").on(table.rigId),
+]);
 
 // NPT Reports table
 export const nptReports = pgTable("npt_reports", {

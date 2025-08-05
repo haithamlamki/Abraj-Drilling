@@ -17,6 +17,8 @@ import { Settings, Plus, Trash2, Users, Database, Cog, UserPlus, Edit, Shield, U
 import type { System, Equipment, Department, ActionParty, Rig, User } from "@shared/schema";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 export default function SettingsPage() {
   const { toast } = useToast();
@@ -30,7 +32,7 @@ export default function SettingsPage() {
     email: "",
     firstName: "",
     role: "drilling_manager" as "admin" | "supervisor" | "drilling_manager",
-    rigId: null as number | null,
+    rigIds: [] as number[],
     departmentId: null as number | null,
   });
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
@@ -312,7 +314,7 @@ export default function SettingsPage() {
         email: "",
         firstName: "",
         role: "drilling_manager",
-        rigId: null,
+        rigIds: [],
         departmentId: null,
       });
       toast({ title: "Success", description: "User created successfully" });
@@ -909,7 +911,7 @@ export default function SettingsPage() {
                           email: "",
                           firstName: "",
                           role: "drilling_manager",
-                          rigId: null,
+                          rigIds: [],
                           departmentId: null,
                         });
                       } else {
@@ -976,22 +978,62 @@ export default function SettingsPage() {
                           </div>
                           <div>
                             <Label htmlFor="rig">Assigned Rig</Label>
-                            <Select
-                              value={newUserData.rigId?.toString() || "none"}
-                              onValueChange={(value) => setNewUserData({ ...newUserData, rigId: value === "none" ? null : parseInt(value) })}
-                            >
-                              <SelectTrigger id="rig" data-testid="select-user-rig">
-                                <SelectValue placeholder="Select a rig" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="none">No Rig</SelectItem>
-                                {rigs.map((rig) => (
-                                  <SelectItem key={rig.id} value={rig.id.toString()}>
-                                    Rig {rig.rigNumber} - {rig.location}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                            <div className="relative">
+                              <Select>
+                                <SelectTrigger id="rig" data-testid="select-user-rig">
+                                  <SelectValue placeholder={
+                                    newUserData.rigIds.length === 0 
+                                      ? "Select rigs" 
+                                      : newUserData.rigIds.length === rigs.length 
+                                        ? "All Rigs Assigned" 
+                                        : `${newUserData.rigIds.length} rig(s) selected`
+                                  } />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <ScrollArea className="h-[200px]">
+                                    <div className="p-2">
+                                      <div 
+                                        className="flex items-center space-x-2 mb-2 pb-2 border-b cursor-pointer hover:bg-accent p-2 rounded"
+                                        onClick={() => {
+                                          if (newUserData.rigIds.length === rigs.length) {
+                                            setNewUserData({ ...newUserData, rigIds: [] });
+                                          } else {
+                                            setNewUserData({ ...newUserData, rigIds: rigs.map(r => r.id) });
+                                          }
+                                        }}
+                                      >
+                                        <Checkbox 
+                                          checked={newUserData.rigIds.length === rigs.length}
+                                          onCheckedChange={() => {}}
+                                        />
+                                        <span className="font-medium">All Rigs Assigned</span>
+                                      </div>
+                                      {rigs.map((rig) => (
+                                        <div 
+                                          key={rig.id} 
+                                          className="flex items-center space-x-2 cursor-pointer hover:bg-accent p-2 rounded"
+                                          onClick={() => {
+                                            const isSelected = newUserData.rigIds.includes(rig.id);
+                                            setNewUserData({
+                                              ...newUserData,
+                                              rigIds: isSelected 
+                                                ? newUserData.rigIds.filter(id => id !== rig.id)
+                                                : [...newUserData.rigIds, rig.id]
+                                            });
+                                          }}
+                                        >
+                                          <Checkbox 
+                                            checked={newUserData.rigIds.includes(rig.id)}
+                                            onCheckedChange={() => {}}
+                                          />
+                                          <span>Rig {rig.rigNumber} - {rig.location}</span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </ScrollArea>
+                                </SelectContent>
+                              </Select>
+                            </div>
                           </div>
                           <div>
                             <Label htmlFor="department">User Departments</Label>
@@ -1042,7 +1084,8 @@ export default function SettingsPage() {
                       </TableHeader>
                       <TableBody>
                         {users.map((currentUserData) => {
-                          const assignedRig = currentUserData.rigId ? rigs.find(r => r.id === currentUserData.rigId) : null;
+                          const userRigIds = (currentUserData as any).rigIds || [];
+                          const assignedRigs = userRigIds.map((id: number) => rigs.find(r => r.id === id)).filter(Boolean);
                           const isEditing = editingItemId === currentUserData.id && editingType === "user";
                           
                           return (
@@ -1130,7 +1173,11 @@ export default function SettingsPage() {
                                     </SelectContent>
                                   </Select>
                                 ) : (
-                                  assignedRig ? `Rig ${assignedRig.rigNumber}` : '-'
+                                  assignedRigs.length === 0 
+                                    ? '-' 
+                                    : assignedRigs.length === rigs.length 
+                                      ? 'All Rigs' 
+                                      : assignedRigs.map((r: any) => `Rig ${r.rigNumber}`).join(', ')
                                 )}
                               </TableCell>
                               <TableCell>
