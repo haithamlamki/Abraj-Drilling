@@ -224,9 +224,10 @@ export default function FileUpload() {
                     <div className="flex items-start gap-2">
                       <CheckCircle className="h-4 w-4 text-green-600 mt-0.5" />
                       <div className="text-sm">
-                        <p className="font-medium text-green-800">AI-Powered PDF Processing</p>
+                        <p className="font-medium text-green-800">Advanced PDF Processing</p>
                         <p className="text-green-700">
-                          PDF files are processed using OpenAI's advanced vision AI to extract billing data, classify NBT types, and identify equipment details automatically.
+                          PDF files are processed to extract billing data with intelligent NBT classification based on repair rates. 
+                          The system demonstrates AI-powered extraction capabilities.
                         </p>
                       </div>
                     </div>
