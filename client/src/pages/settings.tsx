@@ -60,10 +60,10 @@ export default function SettingsPage() {
 
   // Create mutations for each reference type
   const createSystemMutation = useMutation({
-    mutationFn: async (name: string) => apiRequest('/api/systems', {
-      method: 'POST',
-      body: JSON.stringify({ name }),
-    }),
+    mutationFn: async (name: string) => {
+      const response = await apiRequest('POST', '/api/systems', { name });
+      return response.json();
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/systems'] });
       setNewItemName("");
@@ -73,11 +73,10 @@ export default function SettingsPage() {
   });
 
   const createEquipmentMutation = useMutation({
-    mutationFn: async ({ name, systemId }: { name: string; systemId: number }) => 
-      apiRequest('/api/equipment', {
-        method: 'POST',
-        body: JSON.stringify({ name, systemId }),
-      }),
+    mutationFn: async ({ name, systemId }: { name: string; systemId: number }) => {
+      const response = await apiRequest('POST', '/api/equipment', { name, systemId });
+      return response.json();
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/equipment'] });
       setNewItemName("");
@@ -88,10 +87,10 @@ export default function SettingsPage() {
   });
 
   const createDepartmentMutation = useMutation({
-    mutationFn: async (name: string) => apiRequest('/api/departments', {
-      method: 'POST',
-      body: JSON.stringify({ name }),
-    }),
+    mutationFn: async (name: string) => {
+      const response = await apiRequest('POST', '/api/departments', { name });
+      return response.json();
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/departments'] });
       setNewItemName("");
@@ -101,10 +100,10 @@ export default function SettingsPage() {
   });
 
   const createActionPartyMutation = useMutation({
-    mutationFn: async (name: string) => apiRequest('/api/action-parties', {
-      method: 'POST',
-      body: JSON.stringify({ name }),
-    }),
+    mutationFn: async (name: string) => {
+      const response = await apiRequest('POST', '/api/action-parties', { name });
+      return response.json();
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/action-parties'] });
       setNewItemName("");
@@ -114,7 +113,10 @@ export default function SettingsPage() {
   });
 
   const deleteSystemMutation = useMutation({
-    mutationFn: async (id: number) => apiRequest(`/api/systems/${id}`, { method: 'DELETE' }),
+    mutationFn: async (id: number) => {
+      const response = await apiRequest('DELETE', `/api/systems/${id}`);
+      return response.json();
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/systems'] });
       queryClient.invalidateQueries({ queryKey: ['/api/equipment'] });
@@ -123,7 +125,10 @@ export default function SettingsPage() {
   });
 
   const deleteEquipmentMutation = useMutation({
-    mutationFn: async (id: number) => apiRequest(`/api/equipment/${id}`, { method: 'DELETE' }),
+    mutationFn: async (id: number) => {
+      const response = await apiRequest('DELETE', `/api/equipment/${id}`);
+      return response.json();
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/equipment'] });
       toast({ title: "Success", description: "Equipment deleted successfully" });
@@ -131,7 +136,10 @@ export default function SettingsPage() {
   });
 
   const deleteDepartmentMutation = useMutation({
-    mutationFn: async (id: number) => apiRequest(`/api/departments/${id}`, { method: 'DELETE' }),
+    mutationFn: async (id: number) => {
+      const response = await apiRequest('DELETE', `/api/departments/${id}`);
+      return response.json();
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/departments'] });
       toast({ title: "Success", description: "Department deleted successfully" });
@@ -139,7 +147,10 @@ export default function SettingsPage() {
   });
 
   const deleteActionPartyMutation = useMutation({
-    mutationFn: async (id: number) => apiRequest(`/api/action-parties/${id}`, { method: 'DELETE' }),
+    mutationFn: async (id: number) => {
+      const response = await apiRequest('DELETE', `/api/action-parties/${id}`);
+      return response.json();
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/action-parties'] });
       toast({ title: "Success", description: "Action Party deleted successfully" });
@@ -147,11 +158,10 @@ export default function SettingsPage() {
   });
 
   const updateUserMutation = useMutation({
-    mutationFn: async ({ id, updates }: { id: string; updates: any }) => 
-      apiRequest(`/api/users/${id}`, {
-        method: 'PATCH',
-        body: JSON.stringify(updates),
-      }),
+    mutationFn: async ({ id, updates }: { id: string; updates: any }) => {
+      const response = await apiRequest('PATCH', `/api/users/${id}`, updates);
+      return response.json();
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/users'] });
       toast({ title: "Success", description: "User updated successfully" });
@@ -159,7 +169,10 @@ export default function SettingsPage() {
   });
 
   const deleteUserMutation = useMutation({
-    mutationFn: async (id: string) => apiRequest(`/api/users/${id}`, { method: 'DELETE' }),
+    mutationFn: async (id: string) => {
+      const response = await apiRequest('DELETE', `/api/users/${id}`);
+      return response.json();
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/users'] });
       toast({ title: "Success", description: "User deleted successfully" });
@@ -167,11 +180,10 @@ export default function SettingsPage() {
   });
 
   const createUserMutation = useMutation({
-    mutationFn: async (userData: typeof newUserData) => 
-      apiRequest('/api/users', {
-        method: 'POST',
-        body: JSON.stringify(userData),
-      }),
+    mutationFn: async (userData: typeof newUserData) => {
+      const response = await apiRequest('POST', '/api/users', userData);
+      return response.json();
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/users'] });
       setIsDialogOpen(false);
@@ -187,11 +199,10 @@ export default function SettingsPage() {
   });
 
   const createRigMutation = useMutation({
-    mutationFn: async (rigData: { rigNumber: string; section: string; client: string; location: string; isActive: boolean }) => 
-      apiRequest('/api/rigs', {
-        method: 'POST',
-        body: JSON.stringify(rigData),
-      }),
+    mutationFn: async (rigData: { rigNumber: string; section: string; client: string; location: string; isActive: boolean }) => {
+      const response = await apiRequest('POST', '/api/rigs', rigData);
+      return response.json();
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/rigs'] });
       setShowRigDialog(false);
@@ -201,11 +212,10 @@ export default function SettingsPage() {
   });
 
   const updateRigMutation = useMutation({
-    mutationFn: async ({ id, updates }: { id: number; updates: any }) => 
-      apiRequest(`/api/rigs/${id}`, {
-        method: 'PUT',
-        body: JSON.stringify(updates),
-      }),
+    mutationFn: async ({ id, updates }: { id: number; updates: any }) => {
+      const response = await apiRequest('PATCH', `/api/rigs/${id}`, updates);
+      return response.json();
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/rigs'] });
       setShowRigDialog(false);
