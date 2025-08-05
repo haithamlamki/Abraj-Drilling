@@ -319,20 +319,10 @@ export default function NptForm() {
   }, [watchedNptType]);
 
   const onSaveDraft = () => {
-    // Get current form values without validation
+    // Get current form values without any validation
     const formValues = form.getValues();
     
-    // Manually validate only required fields for draft
-    if (!formValues.date || !formValues.hours || !formValues.rigId) {
-      toast({
-        title: "Error",
-        description: "Please fill in Date, Rig, and Hours to save as draft",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    // Save as draft with current values
+    // Save as draft with whatever values are present (can be empty)
     createReportMutation.mutate({ ...formValues, status: "Draft" });
   };
 
