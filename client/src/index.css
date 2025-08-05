@@ -2,6 +2,11 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Custom 19-column grid for Excel-style NPT form */
+.grid-cols-19 {
+  grid-template-columns: repeat(19, minmax(0, 1fr));
+}
+
 :root {
   --background: hsl(0, 0%, 100%);
   --foreground: hsl(20, 14.3%, 4.1%);

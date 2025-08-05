@@ -167,59 +167,106 @@ export default function NptForm() {
     submitForReviewMutation.mutate({ ...data, status: "Pending Review" });
   };
 
+  // Calculate auto-filled fields
+  const selectedDate = form.watch("date");
+  const year = selectedDate ? new Date(selectedDate).getFullYear() : "";
+  const month = selectedDate ? new Date(selectedDate).toLocaleDateString('en-US', { month: 'short' }) : "";
+
   return (
     <Card>
-      <CardContent className="p-6">
+      <CardContent className="p-2">
         <Form {...form}>
-          <form className="space-y-6">
-            {/* Single Row Layout Header */}
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-              <h3 className="text-lg font-semibold text-blue-800 mb-2">Unified Single-Row NPT Form</h3>
-              <p className="text-sm text-blue-700">All input fields are displayed in a single row format with complete visibility - no hidden fields</p>
+          <form className="space-y-4">
+            {/* Excel Format Header */}
+            <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
+              <h3 className="text-sm font-semibold text-green-800 mb-1">Excel Format NPT Data Entry</h3>
+              <p className="text-xs text-green-700">19-column format matching Excel structure - enter data cell by cell</p>
             </div>
 
-            {/* Complete Single Row Form Layout - All Fields Always Visible */}
-            <div className="space-y-4">
-              {/* Row 1: Basic Information */}
-              <div className="grid grid-cols-12 gap-2 items-end">
-                <div className="col-span-2">
-                  <Label className="text-xs font-medium">Rig Number</Label>
-                  <Input 
-                    value={user?.rigId || "Not Assigned"} 
-                    disabled 
-                    className="bg-gray-50 text-gray-500 h-8 text-xs"
-                    data-testid="input-rig-number"
-                  />
+            {/* Excel-style Table Headers */}
+            <div className="border border-gray-300 rounded-lg overflow-hidden">
+              {/* Column Headers - Exactly 19 columns */}
+              <div className="bg-gray-100 border-b border-gray-300">
+                <div className="grid grid-cols-19 gap-0 text-xs font-medium text-gray-700">
+                  <div className="p-2 border-r border-gray-300 text-center">A<br/>Rig Number</div>
+                  <div className="p-2 border-r border-gray-300 text-center">B<br/>Year</div>
+                  <div className="p-2 border-r border-gray-300 text-center">C<br/>Month</div>
+                  <div className="p-2 border-r border-gray-300 text-center">D<br/>Date</div>
+                  <div className="p-2 border-r border-gray-300 text-center">E<br/>Hours</div>
+                  <div className="p-2 border-r border-gray-300 text-center">F<br/>NPT Type</div>
+                  <div className="p-2 border-r border-gray-300 text-center">G<br/>System</div>
+                  <div className="p-2 border-r border-gray-300 text-center">H<br/>Equipment</div>
+                  <div className="p-2 border-r border-gray-300 text-center">I<br/>The Part</div>
+                  <div className="p-2 border-r border-gray-300 text-center">J<br/>Contractual</div>
+                  <div className="p-2 border-r border-gray-300 text-center">K<br/>Department</div>
+                  <div className="p-2 border-r border-gray-300 text-center">L<br/>Failure Desc.</div>
+                  <div className="p-2 border-r border-gray-300 text-center">M<br/>Root Cause</div>
+                  <div className="p-2 border-r border-gray-300 text-center">N<br/>Corrective</div>
+                  <div className="p-2 border-r border-gray-300 text-center">O<br/>Future Action</div>
+                  <div className="p-2 border-r border-gray-300 text-center">P<br/>Action Party</div>
+                  <div className="p-2 border-r border-gray-300 text-center">Q<br/>N2 Number</div>
+                  <div className="p-2 border-r border-gray-300 text-center">R<br/>Investigation</div>
+                  <div className="p-2 text-center">S<br/>Well Name</div>
                 </div>
+              </div>
 
-                <div className="col-span-2">
-                  <FormField
-                    control={form.control}
-                    name="date"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-xs font-medium">Date *</FormLabel>
+              {/* Data Row - Excel-style input cells */}
+              <div className="bg-white">
+                <div className="grid grid-cols-19 gap-0 text-xs">
+                  {/* A - Rig Number */}
+                  <div className="p-1 border-r border-gray-200">
+                    <Input 
+                      value={user?.rigId || "Not Assigned"} 
+                      disabled 
+                      className="bg-gray-50 text-gray-600 h-8 text-xs border-0 rounded-none text-center"
+                      data-testid="input-rig-number"
+                    />
+                  </div>
+
+                  {/* B - Year (Auto-calculated) */}
+                  <div className="p-1 border-r border-gray-200">
+                    <Input 
+                      value={year}
+                      disabled 
+                      className="bg-gray-50 text-gray-600 h-8 text-xs border-0 rounded-none text-center"
+                      data-testid="input-year"
+                    />
+                  </div>
+
+                  {/* C - Month (Auto-calculated) */}
+                  <div className="p-1 border-r border-gray-200">
+                    <Input 
+                      value={month}
+                      disabled 
+                      className="bg-gray-50 text-gray-600 h-8 text-xs border-0 rounded-none text-center"
+                      data-testid="input-month"
+                    />
+                  </div>
+
+                  {/* D - Date */}
+                  <div className="p-1 border-r border-gray-200">
+                    <FormField
+                      control={form.control}
+                      name="date"
+                      render={({ field }) => (
                         <FormControl>
                           <Input 
                             type="date" 
                             {...field} 
-                            className="h-8 text-xs"
+                            className="h-8 text-xs border-0 rounded-none"
                             data-testid="input-date"
                           />
                         </FormControl>
-                        <FormMessage className="text-xs" />
-                      </FormItem>
-                    )}
-                  />
-                </div>
+                      )}
+                    />
+                  </div>
 
-                <div className="col-span-1">
-                  <FormField
-                    control={form.control}
-                    name="hours"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-xs font-medium">Hours *</FormLabel>
+                  {/* E - Hours */}
+                  <div className="p-1 border-r border-gray-200">
+                    <FormField
+                      control={form.control}
+                      name="hours"
+                      render={({ field }) => (
                         <FormControl>
                           <Input 
                             type="number" 
@@ -228,49 +275,24 @@ export default function NptForm() {
                             max="24"
                             {...field}
                             onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
-                            className="h-8 text-xs"
+                            className="h-8 text-xs border-0 rounded-none text-center"
                             data-testid="input-hours"
                           />
                         </FormControl>
-                        <FormMessage className="text-xs" />
-                      </FormItem>
-                    )}
-                  />
-                </div>
+                      )}
+                    />
+                  </div>
 
-                <div className="col-span-2">
-                  <FormField
-                    control={form.control}
-                    name="wellName"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-xs font-medium">Well Name</FormLabel>
-                        <FormControl>
-                          <Input 
-                            placeholder="Well name"
-                            {...field}
-                            value={field.value || ''}
-                            className="h-8 text-xs"
-                            data-testid="input-well-name"
-                          />
-                        </FormControl>
-                        <FormMessage className="text-xs" />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                <div className="col-span-2">
-                  <FormField
-                    control={form.control}
-                    name="nptType"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-xs font-medium">NPT Type *</FormLabel>
+                  {/* F - NPT Type */}
+                  <div className="p-1 border-r border-gray-200">
+                    <FormField
+                      control={form.control}
+                      name="nptType"
+                      render={({ field }) => (
                         <Select onValueChange={field.onChange} value={field.value} data-testid="select-npt-type">
                           <FormControl>
-                            <SelectTrigger className="h-8 text-xs">
-                              <SelectValue placeholder="NPT Type" />
+                            <SelectTrigger className="h-8 text-xs border-0 rounded-none">
+                              <SelectValue placeholder="Select" />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
@@ -278,48 +300,20 @@ export default function NptForm() {
                             <SelectItem value="Abraj">Abraj</SelectItem>
                           </SelectContent>
                         </Select>
-                        <FormMessage className="text-xs" />
-                      </FormItem>
-                    )}
-                  />
-                </div>
+                      )}
+                    />
+                  </div>
 
-                <div className="col-span-3">
-                  <FormField
-                    control={form.control}
-                    name="notificationNumber"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-xs font-medium">Notification (N2)</FormLabel>
-                        <FormControl>
-                          <Input 
-                            placeholder="N2 Number"
-                            {...field}
-                            value={field.value || ''}
-                            className="h-8 text-xs"
-                            data-testid="input-notification-number"
-                          />
-                        </FormControl>
-                        <FormMessage className="text-xs" />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-              </div>
-
-              {/* Row 2: System and Equipment - Always Visible */}
-              <div className="grid grid-cols-12 gap-2 items-end">
-                <div className="col-span-2">
-                  <FormField
-                    control={form.control}
-                    name="system"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-xs font-medium">System</FormLabel>
+                  {/* G - System */}
+                  <div className="p-1 border-r border-gray-200">
+                    <FormField
+                      control={form.control}
+                      name="system"
+                      render={({ field }) => (
                         <Select onValueChange={field.onChange} value={field.value || ''} data-testid="select-system">
                           <FormControl>
-                            <SelectTrigger className="h-8 text-xs">
-                              <SelectValue placeholder="System" />
+                            <SelectTrigger className="h-8 text-xs border-0 rounded-none">
+                              <SelectValue placeholder="Select" />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
@@ -330,23 +324,20 @@ export default function NptForm() {
                             ))}
                           </SelectContent>
                         </Select>
-                        <FormMessage className="text-xs" />
-                      </FormItem>
-                    )}
-                  />
-                </div>
+                      )}
+                    />
+                  </div>
 
-                <div className="col-span-2">
-                  <FormField
-                    control={form.control}
-                    name="parentEquipment"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-xs font-medium">Equipment</FormLabel>
+                  {/* H - Equipment */}
+                  <div className="p-1 border-r border-gray-200">
+                    <FormField
+                      control={form.control}
+                      name="parentEquipment"
+                      render={({ field }) => (
                         <Select onValueChange={field.onChange} value={field.value || ''} data-testid="select-parent-equipment">
                           <FormControl>
-                            <SelectTrigger className="h-8 text-xs">
-                              <SelectValue placeholder="Equipment" />
+                            <SelectTrigger className="h-8 text-xs border-0 rounded-none">
+                              <SelectValue placeholder="Select" />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
@@ -357,45 +348,58 @@ export default function NptForm() {
                             ))}
                           </SelectContent>
                         </Select>
-                        <FormMessage className="text-xs" />
-                      </FormItem>
-                    )}
-                  />
-                </div>
+                      )}
+                    />
+                  </div>
 
-                <div className="col-span-2">
-                  <FormField
-                    control={form.control}
-                    name="partEquipment"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-xs font-medium">Part</FormLabel>
+                  {/* I - The Part */}
+                  <div className="p-1 border-r border-gray-200">
+                    <FormField
+                      control={form.control}
+                      name="partEquipment"
+                      render={({ field }) => (
                         <FormControl>
                           <Input 
-                            placeholder="Part/Component"
+                            placeholder="Part"
                             {...field}
                             value={field.value || ''}
-                            className="h-8 text-xs"
+                            className="h-8 text-xs border-0 rounded-none"
                             data-testid="input-part-equipment"
                           />
                         </FormControl>
-                        <FormMessage className="text-xs" />
-                      </FormItem>
-                    )}
-                  />
-                </div>
+                      )}
+                    />
+                  </div>
 
-                <div className="col-span-2">
-                  <FormField
-                    control={form.control}
-                    name="department"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-xs font-medium">Department</FormLabel>
+                  {/* J - Contractual */}
+                  <div className="p-1 border-r border-gray-200">
+                    <FormField
+                      control={form.control}
+                      name="contractualProcess"
+                      render={({ field }) => (
+                        <FormControl>
+                          <Input 
+                            placeholder="Process"
+                            {...field}
+                            value={field.value || ''}
+                            className="h-8 text-xs border-0 rounded-none"
+                            data-testid="input-contractual-process"
+                          />
+                        </FormControl>
+                      )}
+                    />
+                  </div>
+
+                  {/* K - Department */}
+                  <div className="p-1 border-r border-gray-200">
+                    <FormField
+                      control={form.control}
+                      name="department"
+                      render={({ field }) => (
                         <Select onValueChange={field.onChange} value={field.value || ''} data-testid="select-department">
                           <FormControl>
-                            <SelectTrigger className="h-8 text-xs">
-                              <SelectValue placeholder="Department" />
+                            <SelectTrigger className="h-8 text-xs border-0 rounded-none">
+                              <SelectValue placeholder="Select" />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
@@ -406,23 +410,96 @@ export default function NptForm() {
                             ))}
                           </SelectContent>
                         </Select>
-                        <FormMessage className="text-xs" />
-                      </FormItem>
-                    )}
-                  />
-                </div>
+                      )}
+                    />
+                  </div>
 
-                <div className="col-span-2">
-                  <FormField
-                    control={form.control}
-                    name="actionParty"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-xs font-medium">Action Party</FormLabel>
+                  {/* L - Failure Description */}
+                  <div className="p-1 border-r border-gray-200">
+                    <FormField
+                      control={form.control}
+                      name="immediateCause"
+                      render={({ field }) => (
+                        <FormControl>
+                          <Input 
+                            placeholder="Description"
+                            {...field}
+                            value={field.value || ''}
+                            className="h-8 text-xs border-0 rounded-none"
+                            data-testid="input-immediate-cause"
+                          />
+                        </FormControl>
+                      )}
+                    />
+                  </div>
+
+                  {/* M - Root Cause */}
+                  <div className="p-1 border-r border-gray-200">
+                    <FormField
+                      control={form.control}
+                      name="rootCause"
+                      render={({ field }) => (
+                        <FormControl>
+                          <Input 
+                            placeholder="Root Cause"
+                            {...field}
+                            value={field.value || ''}
+                            className="h-8 text-xs border-0 rounded-none"
+                            data-testid="input-root-cause"
+                          />
+                        </FormControl>
+                      )}
+                    />
+                  </div>
+
+                  {/* N - Corrective Action */}
+                  <div className="p-1 border-r border-gray-200">
+                    <FormField
+                      control={form.control}
+                      name="correctiveAction"
+                      render={({ field }) => (
+                        <FormControl>
+                          <Input 
+                            placeholder="Corrective"
+                            {...field}
+                            value={field.value || ''}
+                            className="h-8 text-xs border-0 rounded-none"
+                            data-testid="input-corrective-action"
+                          />
+                        </FormControl>
+                      )}
+                    />
+                  </div>
+
+                  {/* O - Future Action */}
+                  <div className="p-1 border-r border-gray-200">
+                    <FormField
+                      control={form.control}
+                      name="futureAction"
+                      render={({ field }) => (
+                        <FormControl>
+                          <Input 
+                            placeholder="Future Action"
+                            {...field}
+                            value={field.value || ''}
+                            className="h-8 text-xs border-0 rounded-none"
+                            data-testid="input-future-action"
+                          />
+                        </FormControl>
+                      )}
+                    />
+                  </div>
+
+                  {/* P - Action Party */}
+                  <div className="p-1 border-r border-gray-200">
+                    <FormField
+                      control={form.control}
+                      name="actionParty"
+                      render={({ field }) => (
                         <Select onValueChange={field.onChange} value={field.value || ''} data-testid="select-action-party">
                           <FormControl>
-                            <SelectTrigger className="h-8 text-xs">
-                              <SelectValue placeholder="Action Party" />
+                            <SelectTrigger className="h-8 text-xs border-0 rounded-none">
+                              <SelectValue placeholder="Select" />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
@@ -433,154 +510,72 @@ export default function NptForm() {
                             ))}
                           </SelectContent>
                         </Select>
-                        <FormMessage className="text-xs" />
-                      </FormItem>
-                    )}
-                  />
-                </div>
+                      )}
+                    />
+                  </div>
 
-                <div className="col-span-2">
-                  <FormField
-                    control={form.control}
-                    name="investigationReport"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-xs font-medium">Investigation</FormLabel>
+                  {/* Q - Notification Number */}
+                  <div className="p-1 border-r border-gray-200">
+                    <FormField
+                      control={form.control}
+                      name="notificationNumber"
+                      render={({ field }) => (
                         <FormControl>
                           <Input 
-                            placeholder="Report details"
+                            placeholder="N2"
                             {...field}
                             value={field.value || ''}
-                            className="h-8 text-xs"
+                            className="h-8 text-xs border-0 rounded-none text-center"
+                            data-testid="input-notification-number"
+                          />
+                        </FormControl>
+                      )}
+                    />
+                  </div>
+
+                  {/* R - Investigation Report */}
+                  <div className="p-1 border-r border-gray-200">
+                    <FormField
+                      control={form.control}
+                      name="investigationReport"
+                      render={({ field }) => (
+                        <FormControl>
+                          <Input 
+                            placeholder="Report"
+                            {...field}
+                            value={field.value || ''}
+                            className="h-8 text-xs border-0 rounded-none"
                             data-testid="input-investigation-report"
                           />
                         </FormControl>
-                        <FormMessage className="text-xs" />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-              </div>
+                      )}
+                    />
+                  </div>
 
-              {/* Row 3: Causes and Actions - Always Visible */}
-              <div className="grid grid-cols-12 gap-2 items-end">
-                <div className="col-span-3">
-                  <FormField
-                    control={form.control}
-                    name="immediateCause"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-xs font-medium">Immediate Cause</FormLabel>
+                  {/* S - Well Name */}
+                  <div className="p-1">
+                    <FormField
+                      control={form.control}
+                      name="wellName"
+                      render={({ field }) => (
                         <FormControl>
                           <Input 
-                            placeholder="Immediate cause description"
+                            placeholder="Well"
                             {...field}
                             value={field.value || ''}
-                            className="h-8 text-xs"
-                            data-testid="input-immediate-cause"
+                            className="h-8 text-xs border-0 rounded-none"
+                            data-testid="input-well-name"
                           />
                         </FormControl>
-                        <FormMessage className="text-xs" />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                <div className="col-span-3">
-                  <FormField
-                    control={form.control}
-                    name="rootCause"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-xs font-medium">Root Cause</FormLabel>
-                        <FormControl>
-                          <Input 
-                            placeholder="Root cause analysis"
-                            {...field}
-                            value={field.value || ''}
-                            className="h-8 text-xs"
-                            data-testid="input-root-cause"
-                          />
-                        </FormControl>
-                        <FormMessage className="text-xs" />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                <div className="col-span-3">
-                  <FormField
-                    control={form.control}
-                    name="correctiveAction"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-xs font-medium">Corrective Action</FormLabel>
-                        <FormControl>
-                          <Input 
-                            placeholder="Corrective action taken"
-                            {...field}
-                            value={field.value || ''}
-                            className="h-8 text-xs"
-                            data-testid="input-corrective-action"
-                          />
-                        </FormControl>
-                        <FormMessage className="text-xs" />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                <div className="col-span-3">
-                  <FormField
-                    control={form.control}
-                    name="futureAction"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-xs font-medium">Future Action</FormLabel>
-                        <FormControl>
-                          <Input 
-                            placeholder="Future prevention actions"
-                            {...field}
-                            value={field.value || ''}
-                            className="h-8 text-xs"
-                            data-testid="input-future-action"
-                          />
-                        </FormControl>
-                        <FormMessage className="text-xs" />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-              </div>
-
-              {/* Row 4: Contractual Process - Always Visible */}
-              <div className="grid grid-cols-12 gap-2 items-end">
-                <div className="col-span-12">
-                  <FormField
-                    control={form.control}
-                    name="contractualProcess"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-xs font-medium">Contractual Process / Additional Details</FormLabel>
-                        <FormControl>
-                          <Input 
-                            placeholder="Contractual process description or additional operational details"
-                            {...field}
-                            value={field.value || ''}
-                            className="h-8 text-xs"
-                            data-testid="input-contractual-process"
-                          />
-                        </FormControl>
-                        <FormMessage className="text-xs" />
-                      </FormItem>
-                    )}
-                  />
+                      )}
+                    />
+                  </div>
                 </div>
               </div>
             </div>
 
             {/* Form Actions */}
-            <div className="flex justify-end space-x-4 pt-6 border-t border-gray-200">
+            <div className="flex justify-end space-x-4 pt-4 border-t border-gray-200">
               <Button 
                 type="button" 
                 variant="outline"
