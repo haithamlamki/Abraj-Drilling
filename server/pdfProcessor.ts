@@ -177,11 +177,13 @@ Extract each billing row with the following information:
 Important NBT classification rules:
 1. The following rate types are ALL classified as "Abraj" NBT:
    - ZERO RATE
-   - BREAKDOWN RATE
-   - REDUCE REPAIR RATE
+   - BREAKDOWN RATE (distinct from REDUCE REPAIR RATE)
+   - REDUCE REPAIR RATE (sometimes appears as REDUCED REPAIR RATE)
    - REPAIR RATE
    - REPAIR RATE T4
-   - Any variation containing "REPAIR", "BREAKDOWN", "REDUCED", or "ZERO"
+   Important: Extract the exact rate type name as it appears in the PDF. Don't confuse:
+   - "BREAKDOWN RATE" is its own rate type
+   - "REDUCE REPAIR RATE" or "REDUCED REPAIR RATE" is a separate rate type
 2. "Contractual" NBT includes: RIG MOVE, LOGGING, SERVICE, etc.
 3. Operating Rate is productive time - do not include these rows
 4. Extract the ticket number if present (format: DR + numbers)
