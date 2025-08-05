@@ -950,7 +950,7 @@ export default function SettingsPage() {
                           </div>
                           <div className="grid grid-cols-2 gap-4">
                             <div>
-                              <Label htmlFor="firstName">First Name</Label>
+                              <Label htmlFor="firstName">Name</Label>
                               <Input
                                 id="firstName"
                                 value={newUserData.firstName}
@@ -1655,7 +1655,6 @@ export default function SettingsPage() {
           </div>
         </div>
       </div>
-      
       {/* Rig Dialog for Create/Edit */}
       <Dialog open={showRigDialog} onOpenChange={setShowRigDialog}>
         <DialogContent>
@@ -1757,7 +1756,6 @@ export default function SettingsPage() {
           </form>
         </DialogContent>
       </Dialog>
-
       {/* Rig Import Dialog */}
       <Dialog open={showRigImportDialog} onOpenChange={setShowRigImportDialog}>
         <DialogContent>
