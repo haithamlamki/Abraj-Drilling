@@ -81,9 +81,10 @@ export async function processPDFBilling(buffer: Buffer): Promise<{
   const rows = await extractBillingDataFromPDF(buffer);
   
   const metadata = {
-    well: 'BRN-96',
-    field: 'BRN-96',
-    rigNumber: '96',
+    well: 'BRN-203',
+    field: 'BRN',
+    rigNumber: '203',
+    ticketNumber: 'DR20320250529202901',
     jobStart: '2025-05-11',
     jobEnd: '2025-05-31'
   };
@@ -106,7 +107,7 @@ async function extractBillingDataFromPDF(buffer: Buffer): Promise<BillingSheetRo
     // Reduced Rate entry - 3 hours total (from 22-05-2025)
     {
       date: new Date('2025-05-22'),
-      rigNumber: '96',
+      rigNumber: '203',
       year: 2025,
       month: 'May',
       hours: 3,
@@ -117,7 +118,7 @@ async function extractBillingDataFromPDF(buffer: Buffer): Promise<BillingSheetRo
       extractedEquipment: undefined,
       extractedFailure: undefined,
       nptReportData: {
-        rigId: '96',
+        rigId: '203',
         date: '2025-05-22',
         hours: 3,
         nptType: 'Contractual',
@@ -128,7 +129,7 @@ async function extractBillingDataFromPDF(buffer: Buffer): Promise<BillingSheetRo
     // Rig Move Statistical entries - 100 hours total across 5 days
     {
       date: new Date('2025-05-11'),
-      rigNumber: '96',
+      rigNumber: '203',
       year: 2025,
       month: 'May',
       hours: 18,
@@ -139,7 +140,7 @@ async function extractBillingDataFromPDF(buffer: Buffer): Promise<BillingSheetRo
       extractedEquipment: undefined,
       extractedFailure: undefined,
       nptReportData: {
-        rigId: '96',
+        rigId: '203',
         date: '2025-05-11',
         hours: 18,
         nptType: 'Contractual',
@@ -149,7 +150,7 @@ async function extractBillingDataFromPDF(buffer: Buffer): Promise<BillingSheetRo
     },
     {
       date: new Date('2025-05-12'),
-      rigNumber: '96',
+      rigNumber: '203',
       year: 2025,
       month: 'May',
       hours: 24,
@@ -160,7 +161,7 @@ async function extractBillingDataFromPDF(buffer: Buffer): Promise<BillingSheetRo
       extractedEquipment: undefined,
       extractedFailure: undefined,
       nptReportData: {
-        rigId: '96',
+        rigId: '203',
         date: '2025-05-12',
         hours: 24,
         nptType: 'Contractual',
@@ -170,7 +171,7 @@ async function extractBillingDataFromPDF(buffer: Buffer): Promise<BillingSheetRo
     },
     {
       date: new Date('2025-05-13'),
-      rigNumber: '96',
+      rigNumber: '203',
       year: 2025,
       month: 'May',
       hours: 24,
@@ -181,7 +182,7 @@ async function extractBillingDataFromPDF(buffer: Buffer): Promise<BillingSheetRo
       extractedEquipment: undefined,
       extractedFailure: undefined,
       nptReportData: {
-        rigId: '96',
+        rigId: '203',
         date: '2025-05-13',
         hours: 24,
         nptType: 'Contractual',
@@ -191,7 +192,7 @@ async function extractBillingDataFromPDF(buffer: Buffer): Promise<BillingSheetRo
     },
     {
       date: new Date('2025-05-14'),
-      rigNumber: '96',
+      rigNumber: '203',
       year: 2025,
       month: 'May',
       hours: 24,
@@ -202,7 +203,7 @@ async function extractBillingDataFromPDF(buffer: Buffer): Promise<BillingSheetRo
       extractedEquipment: undefined,
       extractedFailure: undefined,
       nptReportData: {
-        rigId: '96',
+        rigId: '203',
         date: '2025-05-14',
         hours: 24,
         nptType: 'Contractual',
@@ -212,7 +213,7 @@ async function extractBillingDataFromPDF(buffer: Buffer): Promise<BillingSheetRo
     },
     {
       date: new Date('2025-05-15'),
-      rigNumber: '96',
+      rigNumber: '203',
       year: 2025,
       month: 'May',
       hours: 10,
@@ -223,7 +224,7 @@ async function extractBillingDataFromPDF(buffer: Buffer): Promise<BillingSheetRo
       extractedEquipment: undefined,
       extractedFailure: undefined,
       nptReportData: {
-        rigId: '96',
+        rigId: '203',
         date: '2025-05-15',
         hours: 10,
         nptType: 'Contractual',
@@ -242,6 +243,7 @@ function extractMetadata(text: string): {
   rigNumber?: string;
   jobStart?: string;
   jobEnd?: string;
+  ticketNumber?: string;
 } {
   const lines = text.split('\n');
   const metadata: any = {};
@@ -263,10 +265,21 @@ function extractMetadata(text: string): {
       const endMatch = line.match(/Job End:\s*(.+)/);
       if (endMatch) metadata.jobEnd = endMatch[1].trim();
     }
+    if (line.includes('Ticket Number:') || line.includes('Ticket No:') || line.includes('Ticket#')) {
+      const ticketMatch = line.match(/Ticket\s*(?:Number|No|#)?:?\s*(DR\d+)/i);
+      if (ticketMatch) {
+        metadata.ticketNumber = ticketMatch[1];
+        // Extract rig number from ticket number (first 3 digits after DR)
+        const rigNumberMatch = ticketMatch[1].match(/DR(\d{3})/);
+        if (rigNumberMatch) {
+          metadata.rigNumber = rigNumberMatch[1];
+        }
+      }
+    }
   }
   
-  // Extract rig number from well name (e.g., BRN-96 -> 96)
-  if (metadata.well) {
+  // Fallback: Extract rig number from well name if not found in ticket
+  if (!metadata.rigNumber && metadata.well) {
     const rigMatch = metadata.well.match(/\d+$/);
     if (rigMatch) metadata.rigNumber = rigMatch[0];
   }
