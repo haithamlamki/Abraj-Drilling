@@ -421,7 +421,7 @@ export default function FileUpload() {
                             const csvContent = [
                               ['Date', 'Rig', 'Year', 'Month', 'Hours', 'NBT Type', 'Rate Type', 'System', 'Equipment', 'Confidence %', 'Description'],
                               ...currentResult.extractedData.map(row => [
-                                new Date(row.date).toLocaleDateString(),
+                                row.date,
                                 row.rigNumber,
                                 row.year,
                                 row.month,
