@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import Navigation from "@/components/layout/navigation";
@@ -10,7 +10,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { FileText, Download, Filter, TrendingUp, Clock, AlertTriangle, CheckCircle } from "lucide-react";
+import { FileText, Download, Filter, TrendingUp, Clock, AlertTriangle, CheckCircle, Trash2 } from "lucide-react";
+import { apiRequest } from "@/lib/queryClient";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import type { NptReport, Rig, System } from "@shared/schema";
 
 interface DashboardStats {
@@ -29,10 +40,12 @@ const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
 export default function ReportsPage() {
   const { toast } = useToast();
   const { user, isAuthenticated, isLoading } = useAuth();
+  const queryClient = useQueryClient();
   const [selectedRig, setSelectedRig] = useState<string>("all");
   const [selectedMonth, setSelectedMonth] = useState<string>("all");
   const [selectedYear, setSelectedYear] = useState<string>(new Date().getFullYear().toString());
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
+  const [deleteReportId, setDeleteReportId] = useState<number | null>(null);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -67,6 +80,25 @@ export default function ReportsPage() {
   const { data: dashboardStats } = useQuery<DashboardStats>({ 
     queryKey: ['/api/dashboard/reports-stats'],
     enabled: isAuthenticated 
+  });
+
+  const deleteReportMutation = useMutation({
+    mutationFn: async (id: number) => 
+      apiRequest('DELETE', `/api/npt-reports/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/npt-reports'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/dashboard/reports-stats'] });
+      toast({ title: "Success", description: "Report deleted successfully" });
+      setDeleteReportId(null);
+    },
+    onError: (error: Error) => {
+      toast({ 
+        title: "Error", 
+        description: error.message || "Failed to delete report",
+        variant: "destructive"
+      });
+    },
   });
 
   // Filter reports based on selected criteria
@@ -149,11 +181,12 @@ export default function ReportsPage() {
                  'July', 'August', 'September', 'October', 'November', 'December'];
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navigation />
-      <div className="flex">
-        <Sidebar />
-        <div className="flex-1 p-6">
+    <>
+      <div className="min-h-screen bg-gray-50">
+        <Navigation />
+        <div className="flex">
+          <Sidebar />
+          <div className="flex-1 p-6">
           <div className="space-y-6">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -379,14 +412,27 @@ export default function ReportsPage() {
                           </TableCell>
                           <TableCell>{system?.name || report.system || '-'}</TableCell>
                           <TableCell>
-                            <Button 
-                              variant="outline" 
-                              size="sm"
-                              onClick={() => window.location.href = `/npt-reports?edit=${report.id}`}
-                              data-testid={`button-view-report-${report.id}`}
-                            >
-                              View
-                            </Button>
+                            <div className="flex items-center gap-2">
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                onClick={() => window.location.href = `/npt-reports?edit=${report.id}`}
+                                data-testid={`button-view-report-${report.id}`}
+                              >
+                                View
+                              </Button>
+                              {user?.role === 'admin' && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => setDeleteReportId(report.id)}
+                                  className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                  data-testid={`button-delete-report-${report.id}`}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              )}
+                            </div>
                           </TableCell>
                         </TableRow>
                       );
@@ -410,5 +456,26 @@ export default function ReportsPage() {
         </div>
       </div>
     </div>
+    
+    <AlertDialog open={!!deleteReportId} onOpenChange={(open) => !open && setDeleteReportId(null)}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete NPT Report</AlertDialogTitle>
+          <AlertDialogDescription>
+            Are you sure you want to delete this report? This action cannot be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={() => deleteReportId && deleteReportMutation.mutate(deleteReportId)}
+            className="bg-red-600 text-white hover:bg-red-700"
+          >
+            Delete
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }
