@@ -20,6 +20,13 @@ import { Info } from "lucide-react";
 import type { System, Equipment, Department, ActionParty, InsertNptReport } from "@shared/schema";
 import type { BillingSheetRow } from "@shared/billingTypes";
 
+// Schema for drafts - minimal validation
+const draftFormSchema = insertNptReportSchema.extend({
+  date: z.string().min(1, "Date is required"),
+  hours: z.number().min(0.1, "Hours must be greater than 0").max(24, "Hours cannot exceed 24"),
+});
+
+// Schema for submission - full validation
 const formSchema = insertNptReportSchema.extend({
   date: z.string().min(1, "Date is required"),
   hours: z.number().min(0.1, "Hours must be greater than 0").max(24, "Hours cannot exceed 24"),
@@ -307,8 +314,22 @@ export default function NptForm() {
     setSelectedNptType(watchedNptType);
   }, [watchedNptType]);
 
-  const onSaveDraft = (data: FormData) => {
-    createReportMutation.mutate({ ...data, status: "Draft" });
+  const onSaveDraft = () => {
+    // Get current form values without validation
+    const formValues = form.getValues();
+    
+    // Manually validate only required fields for draft
+    if (!formValues.date || !formValues.hours || !formValues.rigId) {
+      toast({
+        title: "Error",
+        description: "Please fill in Date, Rig, and Hours to save as draft",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    // Save as draft with current values
+    createReportMutation.mutate({ ...formValues, status: "Draft" });
   };
 
   const onSubmitForReview = (data: FormData) => {
@@ -764,7 +785,7 @@ export default function NptForm() {
               <Button 
                 type="button" 
                 variant="outline"
-                onClick={form.handleSubmit(onSaveDraft)}
+                onClick={onSaveDraft}
                 disabled={createReportMutation.isPending}
                 data-testid="button-save-draft"
               >
