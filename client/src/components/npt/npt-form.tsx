@@ -17,7 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Info } from "lucide-react";
-import type { System, Equipment, Department, ActionParty, InsertNptReport } from "@shared/schema";
+import type { System, Equipment, Department, ActionParty, InsertNptReport, Rig } from "@shared/schema";
 import type { BillingSheetRow } from "@shared/billingTypes";
 
 // Schema for drafts - minimal validation
@@ -114,7 +114,7 @@ export default function NptForm() {
     
     // Otherwise, use default values with billing data if available
     const baseValues = {
-      rigId: user?.rigId || (billingData?.rigNumber ? parseInt(billingData.rigNumber) : 0),
+      rigId: user?.rigId || (billingData?.rigNumber ? parseInt(billingData.rigNumber) : null),
       userId: user?.id || "",
       date: billingData?.date ? new Date(billingData.date).toISOString().split('T')[0] : "",
       hours: billingData?.hours || 0,
@@ -186,6 +186,10 @@ export default function NptForm() {
   }, [existingReport]);
 
   // Fetch reference data
+  const { data: rigs = [] } = useQuery<Rig[]>({
+    queryKey: ['/api/rigs'],
+  });
+  
   const { data: systems = [] } = useQuery<System[]>({
     queryKey: ['/api/systems'],
   });
@@ -395,11 +399,28 @@ export default function NptForm() {
                 <div className="grid grid-cols-19 gap-0 text-xs">
                   {/* A - Rig Number */}
                   <div className="p-1 border-r border-gray-200">
-                    <Input 
-                      value={user?.rigId || "Not Assigned"} 
-                      disabled 
-                      className="bg-gray-50 text-gray-600 h-8 text-xs border-0 rounded-none text-center"
-                      data-testid="input-rig-number"
+                    <FormField
+                      control={form.control}
+                      name="rigId"
+                      render={({ field }) => (
+                        <FormControl>
+                          <Select 
+                            onValueChange={(value) => field.onChange(parseInt(value))}
+                            value={field.value?.toString() || ""}
+                          >
+                            <SelectTrigger className="h-8 text-xs border-0 rounded-none">
+                              <SelectValue placeholder="Select Rig" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {rigs.map((rig) => (
+                                <SelectItem key={rig.id} value={rig.id.toString()}>
+                                  Rig {rig.rigNumber}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </FormControl>
+                      )}
                     />
                   </div>
 
