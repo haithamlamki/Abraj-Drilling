@@ -20,6 +20,25 @@ import type { System, Equipment, Department, ActionParty, InsertNptReport } from
 const formSchema = insertNptReportSchema.extend({
   date: z.string().min(1, "Date is required"),
   hours: z.number().min(0.1, "Hours must be greater than 0").max(24, "Hours cannot exceed 24"),
+}).refine((data) => {
+  // Conditional validation based on NPT type
+  if (data.nptType === 'Contractual') {
+    return !!data.contractualProcess && data.contractualProcess.trim().length > 0;
+  } else if (data.nptType === 'Abraj') {
+    return !!data.system && 
+           !!data.parentEquipment && 
+           !!data.partEquipment && data.partEquipment.trim().length > 0 &&
+           !!data.department &&
+           !!data.immediateCause && data.immediateCause.trim().length > 0 &&
+           !!data.rootCause && data.rootCause.trim().length > 0 &&
+           !!data.correctiveAction && data.correctiveAction.trim().length > 0 &&
+           !!data.futureAction && data.futureAction.trim().length > 0 &&
+           !!data.actionParty;
+  }
+  return true;
+}, {
+  message: "Please fill in all required fields based on NPT type",
+  path: ["nptType"]
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -310,9 +329,14 @@ export default function NptForm() {
                       control={form.control}
                       name="system"
                       render={({ field }) => (
-                        <Select onValueChange={field.onChange} value={field.value || ''} data-testid="select-system">
+                        <Select 
+                          onValueChange={field.onChange} 
+                          value={field.value || ''} 
+                          disabled={selectedNptType !== 'Abraj'}
+                          data-testid="select-system"
+                        >
                           <FormControl>
-                            <SelectTrigger className="h-8 text-xs border-0 rounded-none">
+                            <SelectTrigger className={`h-8 text-xs border-0 rounded-none ${selectedNptType !== 'Abraj' ? 'bg-gray-100 opacity-50' : ''}`}>
                               <SelectValue placeholder="Select" />
                             </SelectTrigger>
                           </FormControl>
@@ -334,9 +358,14 @@ export default function NptForm() {
                       control={form.control}
                       name="parentEquipment"
                       render={({ field }) => (
-                        <Select onValueChange={field.onChange} value={field.value || ''} data-testid="select-parent-equipment">
+                        <Select 
+                          onValueChange={field.onChange} 
+                          value={field.value || ''} 
+                          disabled={selectedNptType !== 'Abraj'}
+                          data-testid="select-parent-equipment"
+                        >
                           <FormControl>
-                            <SelectTrigger className="h-8 text-xs border-0 rounded-none">
+                            <SelectTrigger className={`h-8 text-xs border-0 rounded-none ${selectedNptType !== 'Abraj' ? 'bg-gray-100 opacity-50' : ''}`}>
                               <SelectValue placeholder="Select" />
                             </SelectTrigger>
                           </FormControl>
@@ -363,7 +392,8 @@ export default function NptForm() {
                             placeholder="Part"
                             {...field}
                             value={field.value || ''}
-                            className="h-8 text-xs border-0 rounded-none"
+                            disabled={selectedNptType !== 'Abraj'}
+                            className={`h-8 text-xs border-0 rounded-none ${selectedNptType !== 'Abraj' ? 'bg-gray-100 opacity-50' : ''}`}
                             data-testid="input-part-equipment"
                           />
                         </FormControl>
@@ -382,7 +412,8 @@ export default function NptForm() {
                             placeholder="Process"
                             {...field}
                             value={field.value || ''}
-                            className="h-8 text-xs border-0 rounded-none"
+                            disabled={selectedNptType !== 'Contractual'}
+                            className={`h-8 text-xs border-0 rounded-none ${selectedNptType !== 'Contractual' ? 'bg-gray-100 opacity-50' : ''}`}
                             data-testid="input-contractual-process"
                           />
                         </FormControl>
@@ -396,9 +427,14 @@ export default function NptForm() {
                       control={form.control}
                       name="department"
                       render={({ field }) => (
-                        <Select onValueChange={field.onChange} value={field.value || ''} data-testid="select-department">
+                        <Select 
+                          onValueChange={field.onChange} 
+                          value={field.value || ''} 
+                          disabled={selectedNptType !== 'Abraj'}
+                          data-testid="select-department"
+                        >
                           <FormControl>
-                            <SelectTrigger className="h-8 text-xs border-0 rounded-none">
+                            <SelectTrigger className={`h-8 text-xs border-0 rounded-none ${selectedNptType !== 'Abraj' ? 'bg-gray-100 opacity-50' : ''}`}>
                               <SelectValue placeholder="Select" />
                             </SelectTrigger>
                           </FormControl>
@@ -425,7 +461,8 @@ export default function NptForm() {
                             placeholder="Description"
                             {...field}
                             value={field.value || ''}
-                            className="h-8 text-xs border-0 rounded-none"
+                            disabled={selectedNptType !== 'Abraj'}
+                            className={`h-8 text-xs border-0 rounded-none ${selectedNptType !== 'Abraj' ? 'bg-gray-100 opacity-50' : ''}`}
                             data-testid="input-immediate-cause"
                           />
                         </FormControl>
@@ -444,7 +481,8 @@ export default function NptForm() {
                             placeholder="Root Cause"
                             {...field}
                             value={field.value || ''}
-                            className="h-8 text-xs border-0 rounded-none"
+                            disabled={selectedNptType !== 'Abraj'}
+                            className={`h-8 text-xs border-0 rounded-none ${selectedNptType !== 'Abraj' ? 'bg-gray-100 opacity-50' : ''}`}
                             data-testid="input-root-cause"
                           />
                         </FormControl>
@@ -463,7 +501,8 @@ export default function NptForm() {
                             placeholder="Corrective"
                             {...field}
                             value={field.value || ''}
-                            className="h-8 text-xs border-0 rounded-none"
+                            disabled={selectedNptType !== 'Abraj'}
+                            className={`h-8 text-xs border-0 rounded-none ${selectedNptType !== 'Abraj' ? 'bg-gray-100 opacity-50' : ''}`}
                             data-testid="input-corrective-action"
                           />
                         </FormControl>
@@ -482,7 +521,8 @@ export default function NptForm() {
                             placeholder="Future Action"
                             {...field}
                             value={field.value || ''}
-                            className="h-8 text-xs border-0 rounded-none"
+                            disabled={selectedNptType !== 'Abraj'}
+                            className={`h-8 text-xs border-0 rounded-none ${selectedNptType !== 'Abraj' ? 'bg-gray-100 opacity-50' : ''}`}
                             data-testid="input-future-action"
                           />
                         </FormControl>
@@ -496,9 +536,14 @@ export default function NptForm() {
                       control={form.control}
                       name="actionParty"
                       render={({ field }) => (
-                        <Select onValueChange={field.onChange} value={field.value || ''} data-testid="select-action-party">
+                        <Select 
+                          onValueChange={field.onChange} 
+                          value={field.value || ''} 
+                          disabled={selectedNptType !== 'Abraj'}
+                          data-testid="select-action-party"
+                        >
                           <FormControl>
-                            <SelectTrigger className="h-8 text-xs border-0 rounded-none">
+                            <SelectTrigger className={`h-8 text-xs border-0 rounded-none ${selectedNptType !== 'Abraj' ? 'bg-gray-100 opacity-50' : ''}`}>
                               <SelectValue placeholder="Select" />
                             </SelectTrigger>
                           </FormControl>
