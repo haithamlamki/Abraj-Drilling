@@ -26,6 +26,7 @@ export default function SettingsPage() {
   const [newSystemId, setNewSystemId] = useState<number | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [newUserData, setNewUserData] = useState({
+    id: "",
     email: "",
     firstName: "",
     lastName: "",
@@ -308,6 +309,7 @@ export default function SettingsPage() {
       queryClient.invalidateQueries({ queryKey: ['/api/users'] });
       setIsDialogOpen(false);
       setNewUserData({
+        id: "",
         email: "",
         firstName: "",
         lastName: "",
@@ -926,6 +928,16 @@ export default function SettingsPage() {
                         </DialogHeader>
                         <div className="space-y-4">
                           <div>
+                            <Label htmlFor="userId">ID</Label>
+                            <Input
+                              id="userId"
+                              value={newUserData.id}
+                              onChange={(e) => setNewUserData({ ...newUserData, id: e.target.value })}
+                              placeholder="Enter user ID"
+                              data-testid="input-user-id"
+                            />
+                          </div>
+                          <div>
                             <Label htmlFor="email">Email</Label>
                             <Input
                               id="email"
@@ -999,7 +1011,7 @@ export default function SettingsPage() {
                             </Button>
                             <Button 
                               onClick={() => createUserMutation.mutate(newUserData)}
-                              disabled={createUserMutation.isPending || !newUserData.email || !newUserData.firstName || !newUserData.lastName}
+                              disabled={createUserMutation.isPending || !newUserData.id || !newUserData.email || !newUserData.firstName || !newUserData.lastName}
                               data-testid="button-create-user"
                             >
                               {createUserMutation.isPending ? "Creating..." : "Create User"}
