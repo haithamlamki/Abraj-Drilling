@@ -98,83 +98,7 @@ interface ParsedBillingRow {
   description: string;
 }
 
-function extractManualEntries(pdfText: string): any[] {
-  const entries: any[] = [];
-  const lines = pdfText.split('\n');
-  
-  // Find table data lines (lines with dates)
-  const datePattern = /^(\d{2}-\d{2}-\d{4})\s+/;
-  
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const dateMatch = line.match(datePattern);
-    
-    if (dateMatch) {
-      const [, dateStr] = dateMatch;
-      
-      // Split the line by whitespace to get all columns
-      const columns = line.trim().split(/\s+/);
-      
-      // The columns should be: DATE, BREAKDOWN RATE, OBM BREAKDOWN, OBM OPERATING, OBM REDUCE, OPERATING, REDUCED, TOTAL, followed by description
-      if (columns.length >= 8) {
-        const breakdownRate = parseFloat(columns[1]);
-        const reducedRate = parseFloat(columns[6]);
-        
-        // Extract description (everything after the numeric columns)
-        const descriptionStart = line.search(/[A-Za-z]{2,}/); // Find where text description starts
-        const description = descriptionStart !== -1 ? line.substring(descriptionStart).trim() : '';
-        
-        // Parse date to YYYY-MM-DD format
-        const [day, month, year] = dateStr.split('-');
-        const formattedDate = `${year}-${month}-${day}`;
-        
-        // Extract BREAKDOWN RATE entries
-        if (breakdownRate > 0) {
-          entries.push({
-            date: formattedDate,
-            hours: breakdownRate,
-            rateType: "BREAKDOWN RATE",
-            description: description,
-            nbtType: "Abraj"
-          });
-        }
-        
-        // Extract REDUCED RATE entries
-        if (reducedRate > 0) {
-          entries.push({
-            date: formattedDate,
-            hours: reducedRate,
-            rateType: "REDUCED RATE",
-            description: description,
-            nbtType: "Contractual",
-            system: extractContractualSystem(description)
-          });
-        }
-      }
-    }
-  }
-  
-  return entries;
-}
 
-function extractContractualSystem(description: string): string {
-  const lowerDesc = description.toLowerCase();
-  return CONTRACTUAL_CATEGORIES.find(cat => 
-    lowerDesc.includes(cat.toLowerCase())
-  ) || 'Service';
-}
-
-function mergeExtractedData(openAIRows: any[], manualRows: any[]): any[] {
-  // Create a map of existing dates from OpenAI results
-  const existingDates = new Set(openAIRows.map(row => row.date));
-  
-  // Add manual entries that are missing
-  const missingEntries = manualRows.filter(row => !existingDates.has(row.date));
-  
-  console.log('Adding', missingEntries.length, 'missing entries from manual extraction');
-  
-  return [...openAIRows, ...missingEntries];
-}
 
 export async function processPDFBilling(buffer: Buffer): Promise<{
   rows: BillingSheetRow[];
@@ -316,18 +240,11 @@ ${extractedText}`
     // Log the extracted rows for debugging
     console.log('OpenAI extracted rows:', JSON.stringify(extractedRows, null, 2));
     
-    // Manual check for missing entries
-    const manualCheck = extractManualEntries(extractedText);
-    console.log('Manual extraction found:', manualCheck.length, 'BREAKDOWN RATE entries');
-    
-    // Merge manual entries with OpenAI results
-    const mergedRows = mergeExtractedData(extractedRows, manualCheck);
-    
     // Extract metadata from text
     const metadata = extractMetadata(extractedText);
     
     // Convert extracted rows to BillingSheetRow format
-    const billingRows: BillingSheetRow[] = mergedRows.map((row: any) => {
+    const billingRows: BillingSheetRow[] = extractedRows.map((row: any) => {
       const date = new Date(row.date);
       const month = date.toLocaleString('en-US', { month: 'long' });
       const year = date.getFullYear();
