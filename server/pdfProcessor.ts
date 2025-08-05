@@ -1,6 +1,12 @@
 import type { BillingSheetRow } from '@shared/billingTypes';
 import OpenAI from 'openai';
 
+// Dynamic import to avoid pdf-parse loading test files at startup
+const getPdfParse = async () => {
+  const pdfParse = await import('pdf-parse');
+  return pdfParse.default;
+};
+
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
@@ -77,179 +83,170 @@ export async function processPDFBilling(buffer: Buffer): Promise<{
     throw new Error('Invalid PDF file');
   }
   
-  // Process PDF using OpenAI Vision API to extract billing data
-  const rows = await extractBillingDataFromPDF(buffer);
-  
-  // Extract text content for metadata parsing
-  // Note: In production, you would convert PDF to images and use OpenAI Vision API
-  // For now, using realistic metadata based on common billing sheet format
-  const metadata = {
-    well: 'BRN-96',  // Extracted from "Well: BRN-96"
-    field: 'BRN-96', // Extracted from "Field: BRN-96"
-    rigNumber: '203', // Extracted from ticket number DR203...
-    ticketNumber: 'DR20320250529202901',
-    jobStart: '2025-05-11',
-    jobEnd: '2025-05-31'
-  };
-  
-  return { rows, metadata };
+  try {
+    // Extract text from PDF for metadata
+    const pdfParse = await getPdfParse();
+    const pdfData = await pdfParse(buffer);
+    const extractedText = pdfData.text;
+    
+    // Extract metadata from the PDF text
+    const metadata = extractMetadata(extractedText);
+    
+    // Process PDF to extract billing data
+    const rows = await extractBillingDataFromPDF(buffer);
+    
+    // Ensure metadata has default values if not found
+    const finalMetadata = {
+      well: metadata.well || 'Unknown',
+      field: metadata.field || metadata.well || 'Unknown',
+      rigNumber: metadata.rigNumber || '203',
+      ticketNumber: metadata.ticketNumber || '',
+      jobStart: metadata.jobStart || '',
+      jobEnd: metadata.jobEnd || ''
+    };
+    
+    return { rows, metadata: finalMetadata };
+  } catch (error) {
+    console.error('Error processing PDF:', error);
+    throw new Error('Failed to process PDF billing sheet');
+  }
 }
 
 async function extractBillingDataFromPDF(buffer: Buffer): Promise<BillingSheetRow[]> {
-  // Note: OpenAI Vision API requires image formats, not PDFs
-  // In production, you would:
-  // 1. Convert PDF pages to images using a library like pdf2pic or sharp
-  // 2. Send each page image to OpenAI for text extraction
-  // 3. Combine results from all pages
-  
-  console.log('PDF processing initiated. Size:', buffer.length, 'bytes');
-  
-  // Based on the actual PDF content from BRN 96 May billing sheet
-  // Extract only non-Operating Rate entries (Reduced Rate and Rig Move Statistical)
-  const sampleRows: BillingSheetRow[] = [
-    // Reduced Rate entry - 3 hours total (from 22-05-2025)
+  try {
+    console.log('PDF processing initiated. Size:', buffer.length, 'bytes');
+    
+    // Extract text from PDF
+    const pdfParse = await getPdfParse();
+    const pdfData = await pdfParse(buffer);
+    const extractedText = pdfData.text;
+    
+    console.log('PDF text extraction completed. Text length:', extractedText.length);
+    
+    // Use OpenAI to intelligently parse the billing data
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        {
+          role: 'system',
+          content: `You are an expert at extracting billing data from oil & gas drilling PDFs. 
+Extract each billing row with the following information:
+- Date (in YYYY-MM-DD format)
+- Hours
+- Rate Type (Operating Rate, Reduced Rate, Repair Rate, Zero Rate, Rig Move, etc.)
+- Description of work performed
+- NBT Type (Contractual or Abraj)
+- System category for Contractual NBT (from this list: ${CONTRACTUAL_CATEGORIES.join(', ')})
+
+Important rules:
+1. Only extract rows that are NOT "Operating Rate" - these are productive time
+2. Look for columns like "REDUCED RATE", "REPAIR RATE", "ZERO RATE", "RIG MOVE" with non-zero hours
+3. For Contractual NBT, identify the system category from the description
+4. Extract the ticket number if present (format: DR + numbers)
+
+Return the data as a JSON object with a "rows" array. Format:
+{
+  "rows": [
     {
-      date: new Date('2025-05-22'),
-      rigNumber: '203',
-      year: 2025,
-      month: 'May',
-      hours: 3,
-      nbtType: 'Contractual',
-      rateType: 'Reduced Rate',
-      description: 'Cont. POOH 12.25" Baker PDC bit packed BHA on 5" DP stands from 1069 m to surface. Perform RAY CBL-VDL-GR-CCL WL logging.',
-      extractedSystem: 'Logging',
-      extractedEquipment: undefined,
-      extractedFailure: undefined,
-      nptReportData: {
-        rigId: '203',
-        date: '2025-05-22',
-        hours: 3,
-        nptType: 'Contractual',
-        contractualProcess: 'Cont. POOH 12.25" Baker PDC bit packed BHA on 5" DP stands from 1069 m to surface. Perform RAY CBL-VDL-GR-CCL WL logging.',
-        system: 'Logging',
-        wellName: 'BRN-96',
-        status: 'Draft'
-      }
-    },
-    // Rig Move Statistical entries - 100 hours total across 5 days
-    {
-      date: new Date('2025-05-11'),
-      rigNumber: '203',
-      year: 2025,
-      month: 'May',
-      hours: 18,
-      nbtType: 'Contractual',
-      rateType: 'Rig Move Statistical',
-      description: 'Rig move',
-      extractedSystem: 'Rig move',
-      extractedEquipment: undefined,
-      extractedFailure: undefined,
-      nptReportData: {
-        rigId: '203',
-        date: '2025-05-11',
-        hours: 18,
-        nptType: 'Contractual',
-        contractualProcess: 'Rig Move',
-        system: 'Rig move',
-        wellName: 'BRN-96',
-        status: 'Draft'
-      }
-    },
-    {
-      date: new Date('2025-05-12'),
-      rigNumber: '203',
-      year: 2025,
-      month: 'May',
-      hours: 24,
-      nbtType: 'Contractual',
-      rateType: 'Rig Move Statistical',
-      description: 'Rig move',
-      extractedSystem: 'Rig move',
-      extractedEquipment: undefined,
-      extractedFailure: undefined,
-      nptReportData: {
-        rigId: '203',
-        date: '2025-05-12',
-        hours: 24,
-        nptType: 'Contractual',
-        contractualProcess: 'Rig Move',
-        system: 'Rig move',
-        wellName: 'BRN-96',
-        status: 'Draft'
-      }
-    },
-    {
-      date: new Date('2025-05-13'),
-      rigNumber: '203',
-      year: 2025,
-      month: 'May',
-      hours: 24,
-      nbtType: 'Contractual',
-      rateType: 'Rig Move Statistical',
-      description: 'Rig move',
-      extractedSystem: 'Rig move',
-      extractedEquipment: undefined,
-      extractedFailure: undefined,
-      nptReportData: {
-        rigId: '203',
-        date: '2025-05-13',
-        hours: 24,
-        nptType: 'Contractual',
-        contractualProcess: 'Rig Move',
-        system: 'Rig move',
-        wellName: 'BRN-96',
-        status: 'Draft'
-      }
-    },
-    {
-      date: new Date('2025-05-14'),
-      rigNumber: '203',
-      year: 2025,
-      month: 'May',
-      hours: 24,
-      nbtType: 'Contractual',
-      rateType: 'Rig Move Statistical',
-      description: 'Rig move',
-      extractedSystem: 'Rig move',
-      extractedEquipment: undefined,
-      extractedFailure: undefined,
-      nptReportData: {
-        rigId: '203',
-        date: '2025-05-14',
-        hours: 24,
-        nptType: 'Contractual',
-        contractualProcess: 'Rig Move',
-        system: 'Rig move',
-        wellName: 'BRN-96',
-        status: 'Draft'
-      }
-    },
-    {
-      date: new Date('2025-05-15'),
-      rigNumber: '203',
-      year: 2025,
-      month: 'May',
-      hours: 10,
-      nbtType: 'Contractual',
-      rateType: 'Rig Move Statistical',
-      description: 'Rig move',
-      extractedSystem: 'Rig move',
-      extractedEquipment: undefined,
-      extractedFailure: undefined,
-      nptReportData: {
-        rigId: '203',
-        date: '2025-05-15',
-        hours: 10,
-        nptType: 'Contractual',
-        contractualProcess: 'Rig Move',
-        system: 'Rig move',
-        wellName: 'BRN-96',
-        status: 'Draft'
-      }
+      "date": "YYYY-MM-DD",
+      "hours": number,
+      "rateType": "string",
+      "description": "string",
+      "nbtType": "Contractual" or "Abraj",
+      "system": "string (for Contractual)",
+      "ticketNumber": "string (if found)"
     }
-  ];
-  
-  return sampleRows;
+  ]
+}`
+        },
+        {
+          role: 'user',
+          content: `Extract the billing data from this PDF text:\n\n${extractedText}`
+        }
+      ],
+      response_format: { type: 'json_object' },
+      temperature: 0.1
+    });
+
+    const parsedResponse = JSON.parse(response.choices[0].message.content || '{}');
+    const extractedRows = parsedResponse.rows || parsedResponse.data || [];
+    
+    // Extract metadata from text
+    const metadata = extractMetadata(extractedText);
+    
+    // Convert extracted rows to BillingSheetRow format
+    const billingRows: BillingSheetRow[] = extractedRows.map((row: any) => {
+      const date = new Date(row.date);
+      const month = date.toLocaleString('en-US', { month: 'long' });
+      const year = date.getFullYear();
+      
+      // Determine system for Contractual NBT
+      let extractedSystem = row.system;
+      if (row.nbtType === 'Contractual' && !extractedSystem) {
+        // Try to match description against contractual categories
+        const lowerDesc = row.description.toLowerCase();
+        extractedSystem = CONTRACTUAL_CATEGORIES.find(cat => 
+          lowerDesc.includes(cat.toLowerCase())
+        ) || 'Service';
+      }
+      
+      return {
+        date,
+        rigNumber: metadata.rigNumber || row.ticketNumber?.match(/DR(\d{3})/)?.[1] || '203',
+        year,
+        month,
+        hours: parseFloat(row.hours) || 0,
+        nbtType: row.nbtType || 'Contractual',
+        rateType: row.rateType,
+        description: row.description,
+        extractedSystem: row.nbtType === 'Contractual' ? extractedSystem : undefined,
+        extractedEquipment: undefined,
+        extractedFailure: undefined,
+        nptReportData: {
+          rigId: metadata.rigNumber || row.ticketNumber?.match(/DR(\d{3})/)?.[1] || '203',
+          date: row.date,
+          hours: parseFloat(row.hours) || 0,
+          nptType: row.nbtType || 'Contractual',
+          contractualProcess: row.nbtType === 'Contractual' ? row.description : undefined,
+          system: row.nbtType === 'Contractual' ? extractedSystem : undefined,
+          abrajMainCause: row.nbtType === 'Abraj' ? row.description : undefined,
+          wellName: metadata.well || 'BRN-96',
+          status: 'Draft'
+        }
+      };
+    });
+    
+    console.log(`Extracted ${billingRows.length} billing rows from PDF`);
+    return billingRows;
+    
+  } catch (error) {
+    console.error('Error extracting PDF data:', error);
+    
+    // If extraction fails, return minimal sample data
+    return [{
+      date: new Date(),
+      rigNumber: '203',
+      year: new Date().getFullYear(),
+      month: new Date().toLocaleString('en-US', { month: 'long' }),
+      hours: 0,
+      nbtType: 'Contractual',
+      rateType: 'Other',
+      description: 'Failed to extract PDF data',
+      extractedSystem: 'Service',
+      extractedEquipment: undefined,
+      extractedFailure: undefined,
+      nptReportData: {
+        rigId: '203',
+        date: new Date().toISOString().split('T')[0],
+        hours: 0,
+        nptType: 'Contractual',
+        contractualProcess: 'Failed to extract PDF data',
+        system: 'Service',
+        wellName: 'Unknown',
+        status: 'Draft'
+      }
+    }];
+  }
 }
 
 function extractMetadata(text: string): {
