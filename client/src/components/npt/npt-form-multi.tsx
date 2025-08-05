@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Form, FormControl, FormField, FormItem, FormLabel } from "@/components/ui/form";
+import { Form, FormControl, FormField, FormItem } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -51,6 +51,7 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const [removedRows, setRemovedRows] = useState<number[]>([]);
+  const [isSubmittingForReview, setIsSubmittingForReview] = useState(false);
 
   // Fetch reference data
   const { data: systems = [] } = useQuery<any[]>({
@@ -110,6 +111,7 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
         nbtType: row.nptType,
         date: new Date(row.date),
         description: row.contractualProcess || row.immediateCause || '',
+        status: isSubmittingForReview ? 'Pending' : 'Draft',
       }));
 
       const response = await apiRequest('POST', '/api/npt-reports/from-billing', { rows: billingRows });
@@ -137,7 +139,8 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
     },
   });
 
-  const handleSubmit = (data: FormData) => {
+  const handleSubmit = (data: FormData, submitForReview: boolean = false) => {
+    setIsSubmittingForReview(submitForReview);
     createReportsMutation.mutate(data);
   };
 
@@ -148,61 +151,119 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
   const rows = form.watch("rows");
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Review and Edit NPT Reports from Billing Data</CardTitle>
-        <Alert>
-          <Info className="h-4 w-4" />
-          <AlertDescription>
+    <Card className="border-0 shadow-none">
+      <CardHeader className="px-0">
+        <Alert className="bg-blue-50 border-blue-200">
+          <Info className="h-4 w-4 text-blue-600" />
+          <AlertDescription className="text-sm text-gray-700">
             Review the extracted data below. You can edit any field before creating the NPT reports.
             Click the trash icon to exclude a row from being created.
           </AlertDescription>
         </Alert>
       </CardHeader>
-      <CardContent>
+      <CardContent className="px-0">
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
+          <form onSubmit={form.handleSubmit((data) => handleSubmit(data, false))} className="space-y-6">
+            <div className="overflow-x-auto bg-white rounded-lg border">
+              <table className="w-full border-collapse">
                 <thead>
-                  <tr className="bg-gray-50">
-                    <th className="px-2 py-2 text-xs font-medium text-gray-500">A<br/>Rig</th>
-                    <th className="px-2 py-2 text-xs font-medium text-gray-500">B<br/>Year</th>
-                    <th className="px-2 py-2 text-xs font-medium text-gray-500">C<br/>Month</th>
-                    <th className="px-2 py-2 text-xs font-medium text-gray-500">D<br/>Date</th>
-                    <th className="px-2 py-2 text-xs font-medium text-gray-500">E<br/>Hours</th>
-                    <th className="px-2 py-2 text-xs font-medium text-gray-500">F<br/>NPT Type</th>
-                    <th className="px-2 py-2 text-xs font-medium text-gray-500">G<br/>System</th>
-                    <th className="px-2 py-2 text-xs font-medium text-gray-500">H<br/>Equipment</th>
-                    <th className="px-2 py-2 text-xs font-medium text-gray-500">I<br/>Part</th>
-                    <th className="px-2 py-2 text-xs font-medium text-gray-500">J<br/>Contractual</th>
-                    <th className="px-2 py-2 text-xs font-medium text-gray-500">K<br/>Department</th>
-                    <th className="px-2 py-2 text-xs font-medium text-gray-500">L<br/>Failure Desc.</th>
-                    <th className="px-2 py-2 text-xs font-medium text-gray-500">M<br/>Root Cause</th>
-                    <th className="px-2 py-2 text-xs font-medium text-gray-500">N<br/>Corrective</th>
-                    <th className="px-2 py-2 text-xs font-medium text-gray-500">O<br/>Future Action</th>
-                    <th className="px-2 py-2 text-xs font-medium text-gray-500">P<br/>Action Party</th>
-                    <th className="px-2 py-2 text-xs font-medium text-gray-500">Q<br/>N2 Number</th>
-                    <th className="px-2 py-2 text-xs font-medium text-gray-500">R<br/>Investigation</th>
-                    <th className="px-2 py-2 text-xs font-medium text-gray-500">S<br/>Well Name</th>
-                    <th className="px-2 py-2 text-xs font-medium text-gray-500"></th>
+                  <tr className="border-b">
+                    <th className="border-r px-2 py-3 text-center" colSpan={1}>
+                      <div className="text-xs font-medium text-gray-700">A</div>
+                      <div className="text-xs font-normal text-gray-500">Rig Number</div>
+                    </th>
+                    <th className="border-r px-2 py-3 text-center" colSpan={1}>
+                      <div className="text-xs font-medium text-gray-700">B</div>
+                      <div className="text-xs font-normal text-gray-500">Year</div>
+                    </th>
+                    <th className="border-r px-2 py-3 text-center" colSpan={1}>
+                      <div className="text-xs font-medium text-gray-700">C</div>
+                      <div className="text-xs font-normal text-gray-500">Month</div>
+                    </th>
+                    <th className="border-r px-2 py-3 text-center" colSpan={1}>
+                      <div className="text-xs font-medium text-gray-700">D</div>
+                      <div className="text-xs font-normal text-gray-500">Date</div>
+                    </th>
+                    <th className="border-r px-2 py-3 text-center" colSpan={1}>
+                      <div className="text-xs font-medium text-gray-700">E</div>
+                      <div className="text-xs font-normal text-gray-500">Hours</div>
+                    </th>
+                    <th className="border-r px-2 py-3 text-center" colSpan={1}>
+                      <div className="text-xs font-medium text-gray-700">F</div>
+                      <div className="text-xs font-normal text-gray-500">NPT Type</div>
+                    </th>
+                    <th className="border-r px-2 py-3 text-center" colSpan={1}>
+                      <div className="text-xs font-medium text-gray-700">G</div>
+                      <div className="text-xs font-normal text-gray-500">System</div>
+                    </th>
+                    <th className="border-r px-2 py-3 text-center" colSpan={1}>
+                      <div className="text-xs font-medium text-gray-700">H</div>
+                      <div className="text-xs font-normal text-gray-500">Equipment</div>
+                    </th>
+                    <th className="border-r px-2 py-3 text-center" colSpan={1}>
+                      <div className="text-xs font-medium text-gray-700">I</div>
+                      <div className="text-xs font-normal text-gray-500">The Part</div>
+                    </th>
+                    <th className="border-r px-2 py-3 text-center" colSpan={1}>
+                      <div className="text-xs font-medium text-gray-700">J</div>
+                      <div className="text-xs font-normal text-gray-500">Contractual</div>
+                    </th>
+                    <th className="border-r px-2 py-3 text-center" colSpan={1}>
+                      <div className="text-xs font-medium text-gray-700">K</div>
+                      <div className="text-xs font-normal text-gray-500">Department</div>
+                    </th>
+                    <th className="border-r px-2 py-3 text-center" colSpan={1}>
+                      <div className="text-xs font-medium text-gray-700">L</div>
+                      <div className="text-xs font-normal text-gray-500">Failure Desc.</div>
+                    </th>
+                    <th className="border-r px-2 py-3 text-center" colSpan={1}>
+                      <div className="text-xs font-medium text-gray-700">M</div>
+                      <div className="text-xs font-normal text-gray-500">Root Cause</div>
+                    </th>
+                    <th className="border-r px-2 py-3 text-center" colSpan={1}>
+                      <div className="text-xs font-medium text-gray-700">N</div>
+                      <div className="text-xs font-normal text-gray-500">Corrective</div>
+                    </th>
+                    <th className="border-r px-2 py-3 text-center" colSpan={1}>
+                      <div className="text-xs font-medium text-gray-700">O</div>
+                      <div className="text-xs font-normal text-gray-500">Future Action</div>
+                    </th>
+                    <th className="border-r px-2 py-3 text-center" colSpan={1}>
+                      <div className="text-xs font-medium text-gray-700">P</div>
+                      <div className="text-xs font-normal text-gray-500">Action Party</div>
+                    </th>
+                    <th className="border-r px-2 py-3 text-center" colSpan={1}>
+                      <div className="text-xs font-medium text-gray-700">Q</div>
+                      <div className="text-xs font-normal text-gray-500">N2 Number</div>
+                    </th>
+                    <th className="border-r px-2 py-3 text-center" colSpan={1}>
+                      <div className="text-xs font-medium text-gray-700">R</div>
+                      <div className="text-xs font-normal text-gray-500">Investigation</div>
+                    </th>
+                    <th className="border-r px-2 py-3 text-center" colSpan={1}>
+                      <div className="text-xs font-medium text-gray-700">S</div>
+                      <div className="text-xs font-normal text-gray-500">Well Name</div>
+                    </th>
+                    <th className="px-2 py-3 text-center" colSpan={1}>
+                      <div className="text-xs font-normal text-gray-500">Actions</div>
+                    </th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
+                <tbody>
                   {rows.map((row, index) => {
                     if (removedRows.includes(index)) return null;
                     
                     return (
-                      <tr key={index} className="hover:bg-gray-50">
+                      <tr key={index} className="border-b hover:bg-gray-50">
                         {/* Rig Number (A) */}
-                        <td className="px-1 py-1">
+                        <td className="border-r px-1 py-2">
                           <FormField
                             control={form.control}
                             name={`rows.${index}.rigNumber`}
                             render={({ field }) => (
                               <FormItem>
                                 <FormControl>
-                                  <Input {...field} className="w-16 h-8 text-xs" />
+                                  <Input {...field} className="w-16 h-9 text-sm text-center border-gray-300" />
                                 </FormControl>
                               </FormItem>
                             )}
@@ -210,14 +271,14 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
                         </td>
 
                         {/* Year (B) */}
-                        <td className="px-1 py-1">
+                        <td className="border-r px-1 py-2">
                           <FormField
                             control={form.control}
                             name={`rows.${index}.year`}
                             render={({ field }) => (
                               <FormItem>
                                 <FormControl>
-                                  <Input {...field} className="w-16 h-8 text-xs" />
+                                  <Input {...field} className="w-16 h-9 text-sm text-center border-gray-300" />
                                 </FormControl>
                               </FormItem>
                             )}
@@ -225,14 +286,14 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
                         </td>
 
                         {/* Month (C) */}
-                        <td className="px-1 py-1">
+                        <td className="border-r px-1 py-2">
                           <FormField
                             control={form.control}
                             name={`rows.${index}.month`}
                             render={({ field }) => (
                               <FormItem>
                                 <FormControl>
-                                  <Input {...field} className="w-16 h-8 text-xs" />
+                                  <Input {...field} className="w-16 h-9 text-sm text-center border-gray-300" />
                                 </FormControl>
                               </FormItem>
                             )}
@@ -240,14 +301,14 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
                         </td>
 
                         {/* Date (D) */}
-                        <td className="px-1 py-1">
+                        <td className="border-r px-1 py-2">
                           <FormField
                             control={form.control}
                             name={`rows.${index}.date`}
                             render={({ field }) => (
                               <FormItem>
                                 <FormControl>
-                                  <Input {...field} type="date" className="w-28 h-8 text-xs" />
+                                  <Input {...field} type="date" className="w-28 h-9 text-sm border-gray-300" />
                                 </FormControl>
                               </FormItem>
                             )}
@@ -255,14 +316,14 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
                         </td>
 
                         {/* Hours (E) */}
-                        <td className="px-1 py-1">
+                        <td className="border-r px-1 py-2">
                           <FormField
                             control={form.control}
                             name={`rows.${index}.hours`}
                             render={({ field }) => (
                               <FormItem>
                                 <FormControl>
-                                  <Input {...field} className="w-16 h-8 text-xs" />
+                                  <Input {...field} className="w-16 h-9 text-sm text-center border-gray-300" />
                                 </FormControl>
                               </FormItem>
                             )}
@@ -270,15 +331,15 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
                         </td>
 
                         {/* NPT Type (F) */}
-                        <td className="px-1 py-1">
+                        <td className="border-r px-1 py-2">
                           <FormField
                             control={form.control}
                             name={`rows.${index}.nptType`}
                             render={({ field }) => (
                               <FormItem>
-                                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                <Select onValueChange={field.onChange} value={field.value}>
                                   <FormControl>
-                                    <SelectTrigger className="w-24 h-8 text-xs">
+                                    <SelectTrigger className="h-9 text-sm border-gray-300">
                                       <SelectValue />
                                     </SelectTrigger>
                                   </FormControl>
@@ -293,7 +354,7 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
                         </td>
 
                         {/* System (G) */}
-                        <td className="px-1 py-1">
+                        <td className="border-r px-1 py-2">
                           <FormField
                             control={form.control}
                             name={`rows.${index}.system`}
@@ -319,7 +380,7 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
                         </td>
 
                         {/* Equipment (H) */}
-                        <td className="px-1 py-1">
+                        <td className="border-r px-1 py-2">
                           <FormField
                             control={form.control}
                             name={`rows.${index}.equipment`}
@@ -327,7 +388,7 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
                               <FormItem>
                                 <Select onValueChange={field.onChange} value={field.value || undefined}>
                                   <FormControl>
-                                    <SelectTrigger className="w-28 h-8 text-xs">
+                                    <SelectTrigger className="h-9 text-sm border-gray-300">
                                       <SelectValue placeholder="Select..." />
                                     </SelectTrigger>
                                   </FormControl>
@@ -345,14 +406,14 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
                         </td>
 
                         {/* Part (I) */}
-                        <td className="px-1 py-1">
+                        <td className="border-r px-1 py-2">
                           <FormField
                             control={form.control}
                             name={`rows.${index}.partEquipment`}
                             render={({ field }) => (
                               <FormItem>
                                 <FormControl>
-                                  <Input {...field} className="w-20 h-8 text-xs" />
+                                  <Input {...field} className="h-9 text-sm border-gray-300" />
                                 </FormControl>
                               </FormItem>
                             )}
@@ -360,14 +421,14 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
                         </td>
 
                         {/* Contractual Process (J) */}
-                        <td className="px-1 py-1">
+                        <td className="border-r px-1 py-2">
                           <FormField
                             control={form.control}
                             name={`rows.${index}.contractualProcess`}
                             render={({ field }) => (
                               <FormItem>
                                 <FormControl>
-                                  <Input {...field} className="w-32 h-8 text-xs" />
+                                  <Input {...field} className="h-9 text-sm border-gray-300" />
                                 </FormControl>
                               </FormItem>
                             )}
@@ -375,7 +436,7 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
                         </td>
 
                         {/* Department (K) */}
-                        <td className="px-1 py-1">
+                        <td className="border-r px-1 py-2">
                           <FormField
                             control={form.control}
                             name={`rows.${index}.department`}
@@ -383,7 +444,7 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
                               <FormItem>
                                 <Select onValueChange={field.onChange} value={field.value || undefined}>
                                   <FormControl>
-                                    <SelectTrigger className="w-24 h-8 text-xs">
+                                    <SelectTrigger className="h-9 text-sm border-gray-300">
                                       <SelectValue placeholder="Select..." />
                                     </SelectTrigger>
                                   </FormControl>
@@ -401,14 +462,14 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
                         </td>
 
                         {/* Failure Description (L) - Immediate Cause */}
-                        <td className="px-1 py-1">
+                        <td className="border-r px-1 py-2">
                           <FormField
                             control={form.control}
                             name={`rows.${index}.immediateCause`}
                             render={({ field }) => (
                               <FormItem>
                                 <FormControl>
-                                  <Input {...field} className="w-32 h-8 text-xs" />
+                                  <Input {...field} className="h-9 text-sm border-gray-300" />
                                 </FormControl>
                               </FormItem>
                             )}
@@ -416,14 +477,14 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
                         </td>
 
                         {/* Root Cause (M) */}
-                        <td className="px-1 py-1">
+                        <td className="border-r px-1 py-2">
                           <FormField
                             control={form.control}
                             name={`rows.${index}.rootCause`}
                             render={({ field }) => (
                               <FormItem>
                                 <FormControl>
-                                  <Input {...field} className="w-24 h-8 text-xs" />
+                                  <Input {...field} className="h-9 text-sm border-gray-300" />
                                 </FormControl>
                               </FormItem>
                             )}
@@ -431,14 +492,14 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
                         </td>
 
                         {/* Corrective Action (N) */}
-                        <td className="px-1 py-1">
+                        <td className="border-r px-1 py-2">
                           <FormField
                             control={form.control}
                             name={`rows.${index}.correctiveAction`}
                             render={({ field }) => (
                               <FormItem>
                                 <FormControl>
-                                  <Input {...field} className="w-24 h-8 text-xs" />
+                                  <Input {...field} className="h-9 text-sm border-gray-300" />
                                 </FormControl>
                               </FormItem>
                             )}
@@ -446,14 +507,14 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
                         </td>
 
                         {/* Future Action (O) */}
-                        <td className="px-1 py-1">
+                        <td className="border-r px-1 py-2">
                           <FormField
                             control={form.control}
                             name={`rows.${index}.futureAction`}
                             render={({ field }) => (
                               <FormItem>
                                 <FormControl>
-                                  <Input {...field} className="w-24 h-8 text-xs" />
+                                  <Input {...field} className="h-9 text-sm border-gray-300" />
                                 </FormControl>
                               </FormItem>
                             )}
@@ -461,7 +522,7 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
                         </td>
 
                         {/* Action Party (P) */}
-                        <td className="px-1 py-1">
+                        <td className="border-r px-1 py-2">
                           <FormField
                             control={form.control}
                             name={`rows.${index}.actionParty`}
@@ -469,7 +530,7 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
                               <FormItem>
                                 <Select onValueChange={field.onChange} value={field.value || undefined}>
                                   <FormControl>
-                                    <SelectTrigger className="w-28 h-8 text-xs">
+                                    <SelectTrigger className="h-9 text-sm border-gray-300">
                                       <SelectValue placeholder="Select..." />
                                     </SelectTrigger>
                                   </FormControl>
@@ -487,14 +548,14 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
                         </td>
 
                         {/* N2 Number (Q) */}
-                        <td className="px-1 py-1">
+                        <td className="border-r px-1 py-2">
                           <FormField
                             control={form.control}
                             name={`rows.${index}.notificationNumber`}
                             render={({ field }) => (
                               <FormItem>
                                 <FormControl>
-                                  <Input {...field} className="w-20 h-8 text-xs" />
+                                  <Input {...field} className="h-9 text-sm border-gray-300" />
                                 </FormControl>
                               </FormItem>
                             )}
@@ -502,14 +563,14 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
                         </td>
 
                         {/* Investigation (R) */}
-                        <td className="px-1 py-1">
+                        <td className="border-r px-1 py-2">
                           <FormField
                             control={form.control}
                             name={`rows.${index}.investigationWellName`}
                             render={({ field }) => (
                               <FormItem>
                                 <FormControl>
-                                  <Input {...field} className="w-20 h-8 text-xs" />
+                                  <Input {...field} className="h-9 text-sm border-gray-300" />
                                 </FormControl>
                               </FormItem>
                             )}
@@ -517,14 +578,14 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
                         </td>
 
                         {/* Well Name (S) */}
-                        <td className="px-1 py-1">
+                        <td className="border-r px-1 py-2">
                           <FormField
                             control={form.control}
                             name={`rows.${index}.wellName`}
                             render={({ field }) => (
                               <FormItem>
                                 <FormControl>
-                                  <Input {...field} className="w-20 h-8 text-xs" />
+                                  <Input {...field} className="h-9 text-sm border-gray-300" />
                                 </FormControl>
                               </FormItem>
                             )}
@@ -532,7 +593,7 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
                         </td>
 
                         {/* Remove button */}
-                        <td className="px-1 py-1">
+                        <td className="px-1 py-2">
                           <Button
                             type="button"
                             variant="ghost"
@@ -551,11 +612,21 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
             </div>
 
             <div className="flex justify-end space-x-4 mt-6">
-              <Button type="button" variant="outline" onClick={() => setLocation('/file-upload')}>
-                Cancel
+              <Button 
+                type="submit" 
+                variant="outline"
+                disabled={createReportsMutation.isPending}
+                data-testid="button-save-draft"
+              >
+                Save as Draft
               </Button>
-              <Button type="submit" disabled={createReportsMutation.isPending}>
-                {createReportsMutation.isPending ? "Creating..." : `Create ${rows.length - removedRows.length} NPT Reports`}
+              <Button 
+                type="button"
+                onClick={() => form.handleSubmit((data) => handleSubmit(data, true))()}
+                disabled={createReportsMutation.isPending}
+                data-testid="button-submit-review"
+              >
+                Submit for Review
               </Button>
             </div>
           </form>
