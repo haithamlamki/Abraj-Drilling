@@ -196,18 +196,20 @@ export default function NptForm() {
   });
 
   const createReportMutation = useMutation({
-    mutationFn: async (data: FormData) => {
+    mutationFn: async (data: FormData & { status?: string }) => {
       if (editId) {
         // Update existing report
         await apiRequest('PUT', `/api/npt-reports/${editId}`, {
           ...data,
           date: new Date(data.date).toISOString(),
+          status: data.status || "Draft",
         });
       } else {
         // Create new report
         await apiRequest('POST', '/api/npt-reports', {
           ...data,
           date: new Date(data.date).toISOString(),
+          status: data.status || "Draft",
         });
       }
     },
