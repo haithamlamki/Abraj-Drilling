@@ -196,14 +196,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user.claims.sub;
       const user = await storage.getUser(userId);
       
-      if (!user?.rigId) {
-        return res.status(400).json({ message: "User must be assigned to a rig" });
-      }
-      
+      // Allow users to select any rig, don't force their assigned rig
       const validatedData = insertNptReportSchema.parse({
         ...req.body,
         userId,
-        rigId: user.rigId,
+        // Use the rigId from the request body, not the user's assigned rig
+        rigId: req.body.rigId,
       });
       
       // Business rule validations
