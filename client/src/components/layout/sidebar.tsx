@@ -8,10 +8,13 @@ export default function Sidebar() {
   const [location, setLocation] = useLocation();
   const { user } = useAuth();
 
-  const { data: pendingReports = [] } = useQuery<NptReport[]>({
-    queryKey: ['/api/npt-reports', { status: 'Pending Review' }],
+  const { data: reports = [] } = useQuery<NptReport[]>({
+    queryKey: ['/api/npt-reports'],
     enabled: user?.role === 'admin' || user?.role === 'supervisor',
   });
+  
+  // Filter for pending reports
+  const pendingReports = reports.filter(report => report.status === 'Pending Review');
 
   const navItems = [
     {

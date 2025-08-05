@@ -163,9 +163,24 @@ export default function FileUpload() {
 
   const handleCreateReports = () => {
     if (currentResult?.extractedData && currentResult.extractedData.length > 0) {
-      // Store data in session storage and navigate to bulk NPT form
-      sessionStorage.setItem('allBillingData', JSON.stringify(currentResult.extractedData));
-      setLocation('/npt-reports-bulk');
+      try {
+        // Store data in session storage and navigate to bulk NPT form
+        sessionStorage.setItem('allBillingData', JSON.stringify(currentResult.extractedData));
+        setLocation('/npt-reports-bulk');
+      } catch (error) {
+        console.error('Error navigating to bulk reports:', error);
+        toast({
+          title: "Navigation Error",
+          description: "Failed to navigate to bulk reports page. Please try again.",
+          variant: "destructive",
+        });
+      }
+    } else {
+      toast({
+        title: "No Data",
+        description: "No extracted data available to create reports.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -430,34 +445,48 @@ export default function FileUpload() {
                         <Button 
                           variant="outline" 
                           onClick={() => {
-                            // Export to CSV functionality
-                            const csvContent = [
-                              ['Date', 'Rig', 'Year', 'Month', 'Hours', 'NBT Type', 'Rate Type', 'System', 'Equipment', 'Confidence %', 'Description', 'Well Name'],
-                              ...currentResult.extractedData.map(row => [
-                                new Date(row.date).toLocaleDateString(),
-                                row.rigNumber,
-                                row.year,
-                                row.month,
-                                row.hours,
-                                row.nbtType,
-                                row.rateType,
-                                row.extractedSystem || '',
-                                row.extractedEquipment || '',
-                                Math.round((row.confidence || 0) * 100),
-                                row.description.replace(/,/g, ';'), // Replace commas to avoid CSV issues
-                                row.wellName || 'BRN-96'
-                              ])
-                            ].map(row => row.join(',')).join('\n');
-                            
-                            const blob = new Blob([csvContent], { type: 'text/csv' });
-                            const url = URL.createObjectURL(blob);
-                            const a = document.createElement('a');
-                            a.href = url;
-                            a.download = `extracted_npt_data_${currentResult.fileName.replace(/\.[^/.]+$/, '')}.csv`;
-                            document.body.appendChild(a);
-                            a.click();
-                            document.body.removeChild(a);
-                            URL.revokeObjectURL(url);
+                            try {
+                              // Export to CSV functionality
+                              const csvContent = [
+                                ['Date', 'Rig', 'Year', 'Month', 'Hours', 'NBT Type', 'Rate Type', 'System', 'Equipment', 'Confidence %', 'Description', 'Well Name'],
+                                ...currentResult.extractedData.map(row => [
+                                  new Date(row.date).toLocaleDateString(),
+                                  row.rigNumber,
+                                  row.year,
+                                  row.month,
+                                  row.hours,
+                                  row.nbtType,
+                                  row.rateType,
+                                  row.extractedSystem || '',
+                                  row.extractedEquipment || '',
+                                  Math.round((row.confidence || 0) * 100),
+                                  row.description.replace(/,/g, ';'), // Replace commas to avoid CSV issues
+                                  row.wellName || 'BRN-96'
+                                ])
+                              ].map(row => row.join(',')).join('\n');
+                              
+                              const blob = new Blob([csvContent], { type: 'text/csv' });
+                              const url = URL.createObjectURL(blob);
+                              const a = document.createElement('a');
+                              a.href = url;
+                              a.download = `extracted_npt_data_${currentResult.fileName.replace(/\.[^/.]+$/, '')}.csv`;
+                              document.body.appendChild(a);
+                              a.click();
+                              document.body.removeChild(a);
+                              URL.revokeObjectURL(url);
+                              
+                              toast({
+                                title: "Export Successful",
+                                description: `Exported ${currentResult.extractedData.length} rows to CSV`,
+                              });
+                            } catch (error) {
+                              console.error('CSV export error:', error);
+                              toast({
+                                title: "Export Failed",
+                                description: "Failed to export data to CSV. Please try again.",
+                                variant: "destructive",
+                              });
+                            }
                           }}
                           data-testid="button-export-csv"
                         >
