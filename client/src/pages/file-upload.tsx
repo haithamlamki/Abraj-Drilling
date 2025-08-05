@@ -107,10 +107,7 @@ export default function FileUpload() {
   // Create NPT reports from processed data
   const createReportsMutation = useMutation({
     mutationFn: async (rows: BillingSheetRow[]) => {
-      return await apiRequest(`/api/billing-convert`, {
-        method: 'POST',
-        body: JSON.stringify({ rows }),
-      });
+      return await apiRequest(`/api/billing-convert`, 'POST', { rows });
     },
     onSuccess: () => {
       toast({
@@ -211,6 +208,18 @@ export default function FileUpload() {
                     disabled={uploadMutation.isPending}
                     data-testid="input-file-upload"
                   />
+                  <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
+                    <div className="flex items-start gap-2">
+                      <CheckCircle className="h-4 w-4 text-blue-600 mt-0.5" />
+                      <div className="text-sm">
+                        <p className="font-medium text-blue-800">Intelligent One-Row Processing</p>
+                        <p className="text-blue-700">
+                          Our system automatically extracts complete NPT reports from each billing row, including:
+                          system identification, equipment failures, causes, actions, and proper classification.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
                   <p className="text-sm text-gray-500">
                     Supported formats: CSV, Excel (.xlsx, .xls), Text files
                   </p>

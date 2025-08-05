@@ -405,46 +405,66 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const createdReports = [];
+      const errors = [];
 
       for (const row of rows) {
-        // Find rig by number
-        const rig = await storage.getRigByNumber(parseInt(row.rigNumber));
-        if (!rig) {
-          console.warn(`Rig ${row.rigNumber} not found, skipping row`);
-          continue;
+        try {
+          // Find rig by number
+          const rig = await storage.getRigByNumber(parseInt(row.rigNumber));
+          if (!rig) {
+            errors.push(`Rig ${row.rigNumber} not found`);
+            continue;
+          }
+
+          // Use enhanced NPT report data if available, otherwise create basic report
+          let reportData;
+          if (row.nptReportData) {
+            reportData = {
+              ...row.nptReportData,
+              rigId: rig.id,
+              date: new Date(row.nptReportData.date),
+              year: row.year,
+              month: row.month,
+              userId: user.id,
+              createdBy: userId,
+              createdAt: new Date(),
+              updatedAt: new Date()
+            };
+          } else {
+            // Fallback to basic extraction
+            reportData = {
+              rigId: rig.id,
+              date: row.date,
+              year: row.year,
+              month: row.month,
+              hours: row.hours,
+              nptType: row.nbtType,
+              system: row.extractedSystem || null,
+              parentEquipment: row.extractedEquipment || null,
+              partEquipment: row.extractedFailure || null,
+              contractualProcess: row.nbtType === 'Contractual' ? row.description : null,
+              immediateCause: row.nbtType === 'Abroad' ? row.description : null,
+              wellName: null,
+              userId: user.id,
+              status: 'Draft' as const,
+              createdBy: userId,
+              createdAt: new Date(),
+              updatedAt: new Date()
+            };
+          }
+
+          const newReport = await storage.createNptReport(reportData);
+          createdReports.push(newReport);
+          
+        } catch (error) {
+          errors.push(`Row ${rows.indexOf(row) + 1}: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
-
-        // Find system by name (for Abroad types)
-        let systemName = null;
-        if (row.nbtType === 'Abroad' && row.extractedEquipment) {
-          const system = await storage.getSystemByName(row.extractedEquipment);
-          systemName = system?.name || null;
-        }
-
-        // Create NPT report data
-        const reportData = {
-          rigId: rig.id,
-          date: row.date,
-          year: row.year,
-          month: row.month,
-          hours: row.hours,
-          nptType: row.nbtType,
-          system: systemName,
-          partEquipment: row.extractedFailure || null,
-          contractualProcess: row.nbtType === 'Contractual' ? row.description : null,
-          immediateCause: row.nbtType === 'Abroad' ? row.extractedFailure : null,
-          wellName: null,
-          userId: user.id,
-          status: 'Draft' as const,
-        };
-
-        const newReport = await storage.createNptReport(reportData);
-        createdReports.push(newReport);
       }
 
       res.json({ 
-        message: `Successfully created ${createdReports.length} NPT reports`,
-        createdReports 
+        message: `Successfully created ${createdReports.length} NPT reports${errors.length > 0 ? ` with ${errors.length} errors` : ''}`,
+        createdReports,
+        errors
       });
     } catch (error) {
       console.error("Error converting billing data:", error);

@@ -12,6 +12,30 @@ export interface BillingSheetRow {
   extractedSystem?: string;
   extractedFailure?: string;
   confidence?: number;
+  nptReportData?: NptReportData;
+}
+
+export interface NptReportData {
+  rigId: string;
+  date: string;
+  hours: number;
+  nptType: 'Abroad' | 'Contractual';
+  wellName?: string;
+  status: 'Draft';
+  // Contractual fields
+  contractualProcess?: string;
+  // Abraj fields
+  system?: string;
+  parentEquipment?: string;
+  partEquipment?: string;
+  department?: string;
+  immediateCause?: string;
+  rootCause?: string;
+  correctiveAction?: string;
+  futureAction?: string;
+  actionParty?: string;
+  notificationNumber?: string;
+  investigationReport?: string;
 }
 
 export interface BillingUploadResult {

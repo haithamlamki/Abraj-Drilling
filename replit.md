@@ -10,11 +10,18 @@ The platform serves different user roles (drilling managers, supervisors, and ad
 
 ### Completed Core Platform Features
 - **NPT Reporting System**: Dynamic forms with conditional fields based on NPT type (Abraj, Contractual, etc.)
-- **Billing Sheet Processing**: Automated upload, parsing, and NPT extraction with pattern recognition
+- **Enhanced Billing Sheet Processing**: Advanced intelligent pattern recognition with automatic NPT data extraction
+- **Unified One-Row Processing**: Complete NPT reports generated from single billing sheet rows with AI-like intelligence
 - **Advanced Reports Dashboard**: Data visualization with charts, filtering, and CSV export capabilities
 - **Approval Workflow System**: Complete review process with approve/reject functionality and role-based access
 - **Settings Management**: Comprehensive reference data management for rigs, systems, equipment, departments, and action parties
 - **Database Integration**: Full PostgreSQL integration with proper validation and error handling
+
+### Latest Enhancement (January 5, 2025)
+- **Intelligent Recognition System**: Sophisticated pattern matching for rate types, equipment identification, and system classification
+- **Automatic Field Population**: Complete NPT reports with all required fields (causes, actions, departments) extracted from billing descriptions
+- **Confidence Scoring**: Advanced algorithms provide confidence metrics for extraction accuracy
+- **Unified Report Generation**: Single billing rows now generate complete structured NPT reports with proper field mapping
 
 ## User Preferences
 

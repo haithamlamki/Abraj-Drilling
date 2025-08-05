@@ -205,6 +205,19 @@ export class BillingProcessor {
     if (equipmentData.system) confidence += 0.1;
     if (extractedFailure) confidence += 0.1;
 
+    // Enhanced NPT report data extraction
+    const nptReportData = this.createNptReportData({
+      rigNumber,
+      date,
+      hours,
+      nbtType,
+      rateType,
+      description,
+      system: equipmentData.system,
+      equipment: equipmentData.equipment,
+      failure: extractedFailure
+    });
+
     return {
       rigNumber,
       date,
@@ -217,7 +230,8 @@ export class BillingProcessor {
       extractedEquipment: equipmentData.equipment,
       extractedSystem: equipmentData.system,
       extractedFailure,
-      confidence: Math.min(confidence, 1.0)
+      confidence: Math.min(confidence, 1.0),
+      nptReportData
     };
   }
 
@@ -386,5 +400,205 @@ export class BillingProcessor {
     }
 
     return undefined;
+  }
+
+  // Create structured NPT report data from extracted billing information
+  private createNptReportData(data: {
+    rigNumber: string;
+    date: Date;
+    hours: number;
+    nbtType: 'Abroad' | 'Contractual';
+    rateType: string;
+    description: string;
+    system?: string;
+    equipment?: string;
+    failure?: string;
+  }) {
+    const baseData = {
+      rigId: data.rigNumber,
+      date: data.date.toISOString().split('T')[0],
+      hours: data.hours,
+      nptType: data.nbtType,
+      wellName: this.extractWellName(data.description),
+      status: 'Draft' as const
+    };
+
+    if (data.nbtType === 'Contractual') {
+      return {
+        ...baseData,
+        contractualProcess: this.extractContractualProcess(data.description, data.rateType)
+      };
+    } else {
+      // Abraj NPT data
+      return {
+        ...baseData,
+        system: data.system || this.mapDescriptionToSystem(data.description),
+        parentEquipment: data.equipment || this.extractMainEquipment(data.description),
+        partEquipment: this.extractPartEquipment(data.description, data.equipment),
+        department: this.determineDepartment(data.system, data.equipment),
+        immediateCause: data.failure || this.extractImmediateCause(data.description),
+        rootCause: this.extractRootCause(data.description),
+        correctiveAction: this.extractCorrectiveAction(data.description),
+        futureAction: this.generateFutureAction(data.system, data.equipment),
+        actionParty: this.determineActionParty(data.system, data.equipment),
+        notificationNumber: this.shouldRequireNotification(data.hours) ? 'Required' : '',
+        investigationReport: data.hours >= 6.0 ? 'Required' : ''
+      };
+    }
+  }
+
+  private extractWellName(description: string): string {
+    const wellPatterns = [
+      /well\s+([A-Z0-9-]+)/i,
+      /hole\s+([A-Z0-9-]+)/i,
+      /location\s+([A-Z0-9-]+)/i
+    ];
+
+    for (const pattern of wellPatterns) {
+      const match = description.match(pattern);
+      if (match) return match[1];
+    }
+    return '';
+  }
+
+  private extractContractualProcess(description: string, rateType: string): string {
+    if (rateType === 'Operation Rate') {
+      return description;
+    }
+    return `${rateType}: ${description}`;
+  }
+
+  private mapDescriptionToSystem(description: string): string {
+    const lowerDesc = description.toLowerCase();
+    
+    for (const [system, keywords] of Object.entries(this.systemEquipmentMap)) {
+      if (keywords.some(keyword => lowerDesc.includes(keyword.toLowerCase()))) {
+        return system;
+      }
+    }
+    return 'Other';
+  }
+
+  private extractMainEquipment(description: string): string {
+    const lowerDesc = description.toLowerCase();
+    
+    for (const [, equipmentList] of Object.entries(this.systemEquipmentMap)) {
+      for (const equipment of equipmentList) {
+        if (lowerDesc.includes(equipment.toLowerCase())) {
+          return equipment.charAt(0).toUpperCase() + equipment.slice(1);
+        }
+      }
+    }
+    return 'General Equipment';
+  }
+
+  private extractPartEquipment(description: string, mainEquipment?: string): string {
+    const partKeywords = [
+      'liner', 'piston', 'valve', 'seal', 'gasket', 'bearing', 'motor', 'cable',
+      'switch', 'panel', 'pump', 'hose', 'line', 'manifold', 'head'
+    ];
+
+    const lowerDesc = description.toLowerCase();
+    for (const part of partKeywords) {
+      if (lowerDesc.includes(part)) {
+        return part.charAt(0).toUpperCase() + part.slice(1);
+      }
+    }
+    
+    return mainEquipment ? `${mainEquipment} Component` : 'Component';
+  }
+
+  private determineDepartment(system?: string, equipment?: string): string {
+    if (!system && !equipment) return 'Drilling';
+    
+    const maintenanceKeywords = ['pump', 'engine', 'generator', 'motor', 'electrical'];
+    const description = `${system} ${equipment}`.toLowerCase();
+    
+    if (maintenanceKeywords.some(keyword => description.includes(keyword))) {
+      return description.includes('electrical') || description.includes('generator') ? 'E.Maintenance' : 'M.Maintenance';
+    }
+    
+    return 'Drilling';
+  }
+
+  private extractImmediateCause(description: string): string {
+    const failureIndicators = ['failure', 'failed', 'broken', 'stuck', 'seized', 'damaged', 'leak'];
+    const sentences = description.split(/[.!?]/);
+    
+    for (const sentence of sentences) {
+      if (failureIndicators.some(indicator => sentence.toLowerCase().includes(indicator))) {
+        return sentence.trim();
+      }
+    }
+    
+    return description.split('.')[0] || description.substring(0, 100);
+  }
+
+  private extractRootCause(description: string): string {
+    const rootCauseKeywords = ['due to', 'caused by', 'because of', 'overheated', 'worn', 'old'];
+    const lowerDesc = description.toLowerCase();
+    
+    for (const keyword of rootCauseKeywords) {
+      const index = lowerDesc.indexOf(keyword);
+      if (index !== -1) {
+        const cause = description.substring(index).split('.')[0];
+        return cause || 'Equipment wear and operational stress';
+      }
+    }
+    
+    return 'Equipment wear and operational stress';
+  }
+
+  private extractCorrectiveAction(description: string): string {
+    const actionKeywords = ['replace', 'repair', 'fix', 'change', 'service', 'maintenance'];
+    const actionVerbs = ['replaced', 'repaired', 'fixed', 'changed', 'serviced'];
+    
+    const lowerDesc = description.toLowerCase();
+    
+    for (const verb of actionVerbs) {
+      if (lowerDesc.includes(verb)) {
+        return description;
+      }
+    }
+    
+    for (const action of actionKeywords) {
+      if (lowerDesc.includes(action)) {
+        return `${action.charAt(0).toUpperCase() + action.slice(1)} the affected component`;
+      }
+    }
+    
+    return 'Emergency repair and replacement of damaged components';
+  }
+
+  private generateFutureAction(system?: string, equipment?: string): string {
+    const baseActions = {
+      'Mud Pumps': 'Implement preventive maintenance schedule for pump components',
+      'BOP': 'Increase frequency of BOP testing and maintenance',
+      'Power System': 'Enhance electrical system monitoring and preventive maintenance',
+      'Hoisting': 'Implement regular inspection schedule for hoisting equipment',
+      'Safety': 'Review safety system maintenance protocols'
+    };
+    
+    return baseActions[system as keyof typeof baseActions] || 'Implement enhanced preventive maintenance and monitoring procedures';
+  }
+
+  private determineActionParty(system?: string, equipment?: string): string {
+    if (!system && !equipment) return 'Drilling';
+    
+    const description = `${system} ${equipment}`.toLowerCase();
+    
+    if (description.includes('electrical') || description.includes('generator') || description.includes('power')) {
+      return 'E.Maintenance';
+    }
+    
+    if (description.includes('pump') || description.includes('engine') || description.includes('mechanical')) {
+      return 'M.Maintenance';
+    }
+    
+    return 'Drilling';
+  }
+
+  private shouldRequireNotification(hours: number): boolean {
+    return hours >= 2.0 && hours <= 5.75;
   }
 }
