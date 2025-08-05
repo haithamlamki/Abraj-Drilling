@@ -22,6 +22,7 @@ The platform serves different user roles (drilling managers, supervisors, and ad
 - **Automatic Field Population**: Complete NPT reports with all required fields (causes, actions, departments) extracted from billing descriptions
 - **Confidence Scoring**: Advanced algorithms provide confidence metrics for extraction accuracy
 - **Unified Report Generation**: Single billing rows now generate complete structured NPT reports with proper field mapping
+- **Single-Row Form Layout**: Complete NPT form redesigned with all input fields visible in unified single-row format without any hidden elements
 
 ## User Preferences
 
