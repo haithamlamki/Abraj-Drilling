@@ -284,6 +284,32 @@ ${extractedText}`
     });
     
     console.log(`Extracted ${billingRows.length} billing rows from PDF`);
+    
+    // Log detailed row information for debugging
+    console.log('\n=== Detailed Extraction Results ===');
+    billingRows.forEach((row, index) => {
+      console.log(`Row ${index + 1}:`, {
+        date: row.date.toLocaleDateString(),
+        hours: row.hours,
+        rateType: row.rateType,
+        nbtType: row.nbtType,
+        description: row.description.substring(0, 50) + '...'
+      });
+    });
+    
+    // Check for missing dates
+    const missingDates = ['2025-05-17', '2025-05-23', '2025-05-30'];
+    missingDates.forEach(date => {
+      const found = billingRows.find(row => {
+        const rowDate = row.date.toISOString().split('T')[0];
+        return rowDate === date && row.rateType === 'BREAKDOWN RATE';
+      });
+      if (!found) {
+        console.log(`⚠️  Missing BREAKDOWN RATE entry for ${date}`);
+      }
+    });
+    console.log('=================================\n');
+    
     return billingRows;
     
   } catch (error) {
