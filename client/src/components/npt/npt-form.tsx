@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useForm, useFieldArray } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -16,11 +16,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Info, Plus, Copy, Trash2 } from "lucide-react";
+import { Info } from "lucide-react";
 import type { System, Equipment, Department, ActionParty, InsertNptReport } from "@shared/schema";
 import type { BillingSheetRow } from "@shared/billingTypes";
 
-const singleReportSchema = insertNptReportSchema.extend({
+const formSchema = insertNptReportSchema.extend({
   date: z.string().min(1, "Date is required"),
   hours: z.number().min(0.1, "Hours must be greater than 0").max(24, "Hours cannot exceed 24"),
 }).refine((data) => {
@@ -44,16 +44,13 @@ const singleReportSchema = insertNptReportSchema.extend({
   path: ["nptType"]
 });
 
-const formSchema = z.object({
-  reports: z.array(singleReportSchema)
-});
-
 type FormData = z.infer<typeof formSchema>;
 
 export default function NptForm() {
   const { toast } = useToast();
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const [selectedNptType, setSelectedNptType] = useState<string>("");
   const [billingData, setBillingData] = useState<BillingSheetRow | null>(null);
 
   // Check for billing data in sessionStorage
