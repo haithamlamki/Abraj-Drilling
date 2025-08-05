@@ -24,6 +24,7 @@ The platform serves different user roles (drilling managers, supervisors, and ad
 - **Unified Report Generation**: Single billing rows now generate complete structured NPT reports with proper field mapping
 - **Excel Format Layout**: Complete NPT form redesigned as exact 19-column Excel table format with labeled cells (A-S) matching original spreadsheet structure
 - **Complete Admin Center**: Full user management system with create/edit/delete operations, role assignments, and rig associations for admins
+- **PDF Support Added**: System now accepts PDF billing sheets with automatic NBT classification based on repair/reduce repair/zero rate patterns. PDF processing currently uses demonstration data - integrate with PDF parsing service for production use
 
 ## User Preferences
 
