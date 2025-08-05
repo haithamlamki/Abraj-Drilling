@@ -139,6 +139,12 @@ export class BillingProcessor {
       case 'Zero Rate':
         summary.zeroRateRows++;
         break;
+      case 'Reduced Rate':
+        summary.reducedRateRows++;
+        break;
+      case 'Rig Move Statistical':
+        summary.contractualRows++;
+        break;
     }
 
     // Count by NBT type

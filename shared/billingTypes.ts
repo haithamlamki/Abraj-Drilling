@@ -6,7 +6,7 @@ export interface BillingSheetRow {
   month: string;
   hours: number;
   nbtType: 'Abroad' | 'Contractual';
-  rateType: 'Repair Rate' | 'Reduce Repair Rate' | 'Zero Rate' | 'Operation Rate' | 'Other';
+  rateType: 'Repair Rate' | 'Reduce Repair Rate' | 'Zero Rate' | 'Operation Rate' | 'Operating Rate' | 'Reduced Rate' | 'Rig Move Statistical' | 'Other';
   description: string;
   extractedEquipment?: string;
   extractedSystem?: string;
