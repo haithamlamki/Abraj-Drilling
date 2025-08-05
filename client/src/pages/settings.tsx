@@ -29,9 +29,9 @@ export default function SettingsPage() {
     id: "",
     email: "",
     firstName: "",
-    lastName: "",
     role: "drilling_manager" as "admin" | "supervisor" | "drilling_manager",
     rigId: null as number | null,
+    departmentId: null as number | null,
   });
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [showRigDialog, setShowRigDialog] = useState(false);
@@ -45,7 +45,6 @@ export default function SettingsPage() {
   const [editingUserData, setEditingUserData] = useState<{
     email: string;
     firstName: string;
-    lastName: string;
     role: string;
     rigId: number | null;
   } | null>(null);
@@ -312,9 +311,9 @@ export default function SettingsPage() {
         id: "",
         email: "",
         firstName: "",
-        lastName: "",
         role: "drilling_manager",
         rigId: null,
+        departmentId: null,
       });
       toast({ title: "Success", description: "User created successfully" });
     },
@@ -906,11 +905,12 @@ export default function SettingsPage() {
                       if (!open) {
                         setIsDialogOpen(false);
                         setNewUserData({
+                          id: "",
                           email: "",
                           firstName: "",
-                          lastName: "",
                           role: "drilling_manager",
                           rigId: null,
+                          departmentId: null,
                         });
                       } else {
                         setIsDialogOpen(true);
@@ -948,27 +948,15 @@ export default function SettingsPage() {
                               data-testid="input-user-email"
                             />
                           </div>
-                          <div className="grid grid-cols-2 gap-4">
-                            <div>
-                              <Label htmlFor="firstName">Name</Label>
-                              <Input
-                                id="firstName"
-                                value={newUserData.firstName}
-                                onChange={(e) => setNewUserData({ ...newUserData, firstName: e.target.value })}
-                                placeholder="John"
-                                data-testid="input-user-firstName"
-                              />
-                            </div>
-                            <div>
-                              <Label htmlFor="lastName">Last Name</Label>
-                              <Input
-                                id="lastName"
-                                value={newUserData.lastName}
-                                onChange={(e) => setNewUserData({ ...newUserData, lastName: e.target.value })}
-                                placeholder="Doe"
-                                data-testid="input-user-lastName"
-                              />
-                            </div>
+                          <div>
+                            <Label htmlFor="firstName">Name</Label>
+                            <Input
+                              id="firstName"
+                              value={newUserData.firstName}
+                              onChange={(e) => setNewUserData({ ...newUserData, firstName: e.target.value })}
+                              placeholder="John Doe"
+                              data-testid="input-user-firstName"
+                            />
                           </div>
                           <div>
                             <Label htmlFor="role">Role</Label>
@@ -1005,13 +993,32 @@ export default function SettingsPage() {
                               </SelectContent>
                             </Select>
                           </div>
+                          <div>
+                            <Label htmlFor="department">User Departments</Label>
+                            <Select
+                              value={newUserData.departmentId?.toString() || "none"}
+                              onValueChange={(value) => setNewUserData({ ...newUserData, departmentId: value === "none" ? null : parseInt(value) })}
+                            >
+                              <SelectTrigger id="department" data-testid="select-user-department">
+                                <SelectValue placeholder="Select a department" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="none">No Department</SelectItem>
+                                {departments.map((dept) => (
+                                  <SelectItem key={dept.id} value={dept.id.toString()}>
+                                    {dept.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
                           <div className="flex justify-end gap-2">
                             <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
                               Cancel
                             </Button>
                             <Button 
                               onClick={() => createUserMutation.mutate(newUserData)}
-                              disabled={createUserMutation.isPending || !newUserData.id || !newUserData.email || !newUserData.firstName || !newUserData.lastName}
+                              disabled={createUserMutation.isPending || !newUserData.id || !newUserData.email || !newUserData.firstName}
                               data-testid="button-create-user"
                             >
                               {createUserMutation.isPending ? "Creating..." : "Create User"}
@@ -1042,20 +1049,12 @@ export default function SettingsPage() {
                             <TableRow key={currentUserData.id}>
                               <TableCell className="font-medium">
                                 {isEditing ? (
-                                  <div className="flex gap-2">
-                                    <Input
-                                      value={editingUserData?.firstName || ""}
-                                      onChange={(e) => setEditingUserData({...editingUserData!, firstName: e.target.value})}
-                                      placeholder="First name"
-                                      className="h-8 w-24"
-                                    />
-                                    <Input
-                                      value={editingUserData?.lastName || ""}
-                                      onChange={(e) => setEditingUserData({...editingUserData!, lastName: e.target.value})}
-                                      placeholder="Last name"
-                                      className="h-8 w-24"
-                                    />
-                                  </div>
+                                  <Input
+                                    value={editingUserData?.firstName || ""}
+                                    onChange={(e) => setEditingUserData({...editingUserData!, firstName: e.target.value})}
+                                    placeholder="Name"
+                                    className="h-8 w-48"
+                                  />
                                 ) : (
                                   <div 
                                     className="cursor-pointer hover:underline flex items-center gap-2"
@@ -1065,13 +1064,12 @@ export default function SettingsPage() {
                                       setEditingUserData({
                                         email: currentUserData.email || "",
                                         firstName: currentUserData.firstName || "",
-                                        lastName: currentUserData.lastName || "",
                                         role: currentUserData.role,
                                         rigId: currentUserData.rigId
                                       });
                                     }}
                                   >
-                                    {currentUserData.firstName} {currentUserData.lastName}
+                                    {currentUserData.firstName}
                                     <Edit className="h-3 w-3 opacity-50" />
                                   </div>
                                 )}
@@ -1250,8 +1248,8 @@ export default function SettingsPage() {
                                       setEditingRigData({
                                         rigNumber: rig.rigNumber,
                                         section: rig.section,
-                                        client: rig.client,
-                                        location: rig.location
+                                        client: rig.client || "",
+                                        location: rig.location || ""
                                       });
                                     }}
                                   >
