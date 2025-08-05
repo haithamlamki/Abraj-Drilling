@@ -216,7 +216,16 @@ Return the data as a JSON object with a "rows" array. Format:
         },
         {
           role: 'user',
-          content: `Extract the billing data from this PDF text:\n\n${extractedText}`
+          content: `Extract the billing data from this PDF text. Pay special attention to:
+1. BREAKDOWN RATE entries, especially those with 0.5 hours
+2. All dates in May 2025 (including 17-05-2025, 23-05-2025, 30-05-2025)
+3. Multiple entries on the same date
+4. Small hour values (0.5, 0.25, etc.)
+
+Make sure to extract EVERY row that shows non-productive time, even if they have small durations or appear multiple times.
+
+PDF text:
+${extractedText}`
         }
       ],
       response_format: { type: 'json_object' },
@@ -225,6 +234,9 @@ Return the data as a JSON object with a "rows" array. Format:
 
     const parsedResponse = JSON.parse(response.choices[0].message.content || '{}');
     const extractedRows = parsedResponse.rows || parsedResponse.data || [];
+    
+    // Log the extracted rows for debugging
+    console.log('OpenAI extracted rows:', JSON.stringify(extractedRows, null, 2));
     
     // Extract metadata from text
     const metadata = extractMetadata(extractedText);
