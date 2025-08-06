@@ -881,7 +881,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/npt-reports/from-billing', isAuthenticated, async (req: any, res) => {
     try {
-      const { rows }: { rows: BillingSheetRow[] } = req.body;
+      const mode = req.query.mode === 'draft' ? 'draft' : 'review';
       const userId = req.user.claims.sub;
       const user = await storage.getUser(userId);
 
@@ -889,13 +889,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ message: "User not found" });
       }
 
+      // Import and use the schema builder
+      const { buildBulkNptSchema } = await import('./schemas/nptBulkSchema.js');
+      const schema = buildBulkNptSchema(mode);
+      
+      // Validate input based on mode
+      const validationResult = schema.safeParse(req.body);
+      if (!validationResult.success && mode === 'review') {
+        return res.status(400).json({ 
+          message: "Validation failed",
+          errors: validationResult.error.flatten()
+        });
+      }
+      
+      const { rows } = validationResult.success ? validationResult.data : req.body;
       const createdReports = [];
       const errors = [];
 
       for (const row of rows) {
         try {
           // Find rig by number
-          const rig = await storage.getRigByNumber(parseInt(row.rigNumber));
+          const rigNumber = typeof row.rigNumber === 'string' ? parseInt(row.rigNumber) : row.rigNumber;
+          const rig = await storage.getRigByNumber(rigNumber);
           if (!rig) {
             errors.push(`Rig ${row.rigNumber} not found`);
             continue;
@@ -910,25 +925,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
               date: new Date(row.nptReportData.date),
               year: row.year,
               month: row.month,
-              userId: user.id
+              userId: user.id,
+              status: mode === 'draft' ? 'Draft' : (row.nptReportData.status || 'Pending')
             };
           } else {
             // Fallback to basic extraction
             reportData = {
               rigId: rig.id,
-              date: row.date,
-              year: row.year,
-              month: row.month,
-              hours: row.hours,
-              nptType: row.nbtType,
-              system: row.extractedSystem || null,
-              parentEquipment: row.extractedEquipment || null,
-              partEquipment: row.extractedFailure || null,
-              contractualProcess: row.nbtType === 'Contractual' ? row.description : null,
-              immediateCause: row.nbtType === 'Abroad' ? row.description : null,
-              wellName: null,  
+              date: row.date ? new Date(row.date) : new Date(),
+              year: row.year || new Date().getFullYear(),
+              month: row.month || (new Date().getMonth() + 1),
+              hours: row.hours || 0,
+              nptType: row.nptType || row.nbtType || 'Contractual',
+              system: row.system || row.extractedSystem || null,
+              parentEquipment: row.equipment || row.extractedEquipment || null,
+              partEquipment: row.partEquipment || row.extractedFailure || null,
+              contractualProcess: row.contractualProcess || (row.nbtType === 'Contractual' ? row.description : null),
+              immediateCause: row.immediateCause || (row.nbtType === 'Abroad' ? row.description : null),
+              rootCause: row.rootCause || null,
+              correctiveAction: row.correctiveAction || null,
+              futureAction: row.futureAction || null,
+              department: row.department || null,
+              actionParty: row.actionParty || null,
+              wellName: row.wellName || null,
+              notificationNumber: row.notificationNumber || null,
+              investigationWellName: row.investigationWellName || null,
               userId: user.id,
-              status: 'Draft' as const
+              status: mode === 'draft' ? 'Draft' : 'Pending'
             };
           }
 
@@ -941,7 +964,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       res.json({ 
-        message: `Successfully created ${createdReports.length} NPT reports${errors.length > 0 ? ` with ${errors.length} errors` : ''}`,
+        ok: true,
+        saved: createdReports.length,
+        message: mode === 'draft' 
+          ? `Draft saved: ${createdReports.length} NPT report(s)` 
+          : `Successfully created ${createdReports.length} NPT reports${errors.length > 0 ? ` with ${errors.length} errors` : ''}`,
         createdReports,
         errors
       });

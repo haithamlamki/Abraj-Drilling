@@ -8,7 +8,7 @@ import { Form, FormControl, FormField, FormItem, FormMessage } from "@/component
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Info, Trash2, Copy, Plus } from "lucide-react";
+import { Info, Trash2, Copy, Plus, Undo, Redo, HelpCircle, ChevronDown } from "lucide-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -157,11 +157,24 @@ interface NptFormMultiProps {
   billingData?: BillingSheetRow[];
 }
 
+// Undo/Redo history management
+interface HistoryState {
+  rows: NptRow[];
+  selected: Set<string>;
+}
+
+const MAX_HISTORY = 20;
+
 export default function NptFormMulti({ billingData }: NptFormMultiProps) {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const [isSubmittingForReview, setIsSubmittingForReview] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  
+  // Undo/Redo state
+  const [history, setHistory] = useState<HistoryState[]>([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
+  const [showShortcuts, setShowShortcuts] = useState(false);
 
   // Fetch reference data
   const { data: systems = [] } = useQuery<any[]>({
@@ -229,6 +242,7 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
 
   const addRow = (afterIndex?: number) => {
     const newRow = makeEmptyRow();
+    saveToHistory();
     setRows(prev => {
       const copy = [...prev];
       if (afterIndex == null) copy.push(newRow);
@@ -238,6 +252,7 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
   };
 
   const duplicateRow = (index: number) => {
+    saveToHistory();
     setRows(prev => {
       const copy = [...prev];
       const base = copy[index];
@@ -247,8 +262,54 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
     });
   };
 
+  // Undo/Redo helpers
+  const saveToHistory = () => {
+    const newState: HistoryState = {
+      rows: [...rows],
+      selected: new Set(selected)
+    };
+    
+    // Remove any states after current index
+    const newHistory = history.slice(0, historyIndex + 1);
+    newHistory.push(newState);
+    
+    // Keep only last MAX_HISTORY states
+    if (newHistory.length > MAX_HISTORY) {
+      newHistory.shift();
+    }
+    
+    setHistory(newHistory);
+    setHistoryIndex(newHistory.length - 1);
+  };
+  
+  const undo = () => {
+    if (historyIndex < 0 || history.length === 0) return;
+    
+    // Save current state if we're at the end
+    if (historyIndex === history.length - 1) {
+      saveToHistory();
+    }
+    
+    const prevIndex = Math.max(0, historyIndex - 1);
+    const prevState = history[prevIndex];
+    setRows(prevState.rows);
+    setSelected(prevState.selected);
+    setHistoryIndex(prevIndex);
+  };
+  
+  const redo = () => {
+    if (historyIndex >= history.length - 1) return;
+    
+    const nextIndex = historyIndex + 1;
+    const nextState = history[nextIndex];
+    setRows(nextState.rows);
+    setSelected(nextState.selected);
+    setHistoryIndex(nextIndex);
+  };
+
   const duplicateSelected = () => {
     if (!selected.size) return;
+    saveToHistory();
     setRows(prev => {
       const copy = [...prev];
       // insert duplicates right after each selected row (keep order stable)
@@ -265,12 +326,61 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
 
   const deleteSelected = () => {
     if (!selected.size) return;
+    saveToHistory();
     setRows(prev => prev.filter(row => !selected.has(row.id)));
     setSelected(new Set()); // clear selection after deletion
+  };
+  
+  // Fill-down functionality
+  const fillDown = () => {
+    if (selected.size < 2) return;
+    
+    saveToHistory();
+    const selectedIds = Array.from(selected);
+    const selectedIndices = selectedIds.map(id => rows.findIndex(r => r.id === id)).sort((a, b) => a - b);
+    
+    if (selectedIndices.length < 2) return;
+    
+    const sourceIndex = selectedIndices[0];
+    const sourceRow = rows[sourceIndex];
+    const enabled = enabledFields(sourceRow.nptType);
+    
+    setRows(prev => {
+      const copy = [...prev];
+      for (let i = 1; i < selectedIndices.length; i++) {
+        const targetIndex = selectedIndices[i];
+        const targetRow = copy[targetIndex];
+        
+        // Copy only enabled fields with non-empty values
+        const updated = { ...targetRow };
+        if (enabled.system && sourceRow.system) updated.system = sourceRow.system;
+        if (enabled.equipment && sourceRow.equipment) updated.equipment = sourceRow.equipment;
+        if (enabled.partEquipment && sourceRow.partEquipment) updated.partEquipment = sourceRow.partEquipment;
+        if (enabled.contractualProcess && sourceRow.contractualProcess) updated.contractualProcess = sourceRow.contractualProcess;
+        if (enabled.immediateCause && sourceRow.immediateCause) updated.immediateCause = sourceRow.immediateCause;
+        if (enabled.rootCause && sourceRow.rootCause) updated.rootCause = sourceRow.rootCause;
+        if (enabled.correctiveAction && sourceRow.correctiveAction) updated.correctiveAction = sourceRow.correctiveAction;
+        if (enabled.futureAction && sourceRow.futureAction) updated.futureAction = sourceRow.futureAction;
+        if (enabled.department && sourceRow.department) updated.department = sourceRow.department;
+        if (enabled.actionParty && sourceRow.actionParty) updated.actionParty = sourceRow.actionParty;
+        if (sourceRow.wellName) updated.wellName = sourceRow.wellName;
+        if (sourceRow.notificationNumber) updated.notificationNumber = sourceRow.notificationNumber;
+        if (sourceRow.investigationWellName) updated.investigationWellName = sourceRow.investigationWellName;
+        
+        copy[targetIndex] = updated;
+      }
+      return copy;
+    });
+    
+    toast({
+      title: "Fill Down Complete",
+      description: `Filled ${selectedIndices.length - 1} rows from row ${sourceIndex + 1}`,
+    });
   };
 
   const removeRow = (index: number) => {
     const rowId = rows[index].id;
+    saveToHistory();
     setRows(prev => prev.filter((_, i) => i !== index));
     setSelected(prev => {
       const next = new Set(prev);
@@ -297,33 +407,55 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
   // Keyboard shortcuts
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // Ctrl/Cmd+D: Duplicate selected
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "d") {
         e.preventDefault();
-        // duplicate the last selected row
-        const selectedArray = Array.from(selected);
-        const last = selectedArray[selectedArray.length - 1];
-        if (!last) return;
-        const idx = rows.findIndex(r => r.id === last);
-        if (idx >= 0) duplicateRow(idx);
+        if (selected.size > 0) {
+          duplicateSelected();
+        } else {
+          // If no selection, duplicate the last row
+          if (rows.length > 0) duplicateRow(rows.length - 1);
+        }
       }
+      
+      // Alt+Insert: Add row
       if (e.altKey && e.key === "Insert") {
         e.preventDefault();
         addRow();
       }
+      
+      // Ctrl/Cmd+Shift+F: Fill down
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "f") {
+        e.preventDefault();
+        fillDown();
+      }
+      
+      // Ctrl/Cmd+Z: Undo
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z" && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      }
+      
+      // Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y: Redo
+      if (((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "z") ||
+          ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y")) {
+        e.preventDefault();
+        redo();
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [rows, selected]);
+  }, [rows, selected, history, historyIndex]);
 
   const createReportsMutation = useMutation({
     mutationFn: async (data: FormData) => {
       // Convert rows to billing sheet row format for API
       const billingRows = data.rows.map(row => ({
         rigNumber: row.rigNumber,
-        date: new Date(row.date),
+        date: row.date,
         year: row.year,
         month: row.month,
-        hours: parseFloat(row.hours.toString()),
+        hours: row.hours ? parseFloat(row.hours.toString()) : 0,
         nbtType: row.nptType,
         description: row.contractualProcess || row.immediateCause || '',
         nptReportData: {
@@ -331,7 +463,7 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
           date: row.date,
           year: row.year,
           month: row.month,
-          hours: parseFloat(row.hours.toString()),
+          hours: row.hours ? parseFloat(row.hours.toString()) : 0,
           nptType: row.nptType,
           system: row.system || null,
           parentEquipment: row.equipment || null,
@@ -350,7 +482,8 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
         }
       }));
 
-      const response = await apiRequest('/api/npt-reports/from-billing', {
+      const mode = isSubmittingForReview ? 'review' : 'draft';
+      const response = await apiRequest(`/api/npt-reports/from-billing?mode=${mode}`, {
         method: 'POST',
         body: JSON.stringify({ rows: billingRows }),
         headers: {
@@ -414,6 +547,9 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
         form.trigger();
         return;
       }
+    } else {
+      // Draft mode: no validation, just save as-is
+      console.log('Saving as draft without validation');
     }
     
     setIsSubmittingForReview(submitForReview);
@@ -441,50 +577,123 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
             </div>
 
             {/* Toolbar */}
-            <div className="flex items-center gap-3 mb-4 p-2 bg-gray-50 border border-gray-200 rounded-lg">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => addRow()}
-                data-testid="button-add-row"
-                className="flex items-center gap-2"
-              >
-                <Plus className="h-4 w-4" />
-                Add row
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={duplicateSelected}
-                disabled={selected.size === 0}
-                data-testid="button-duplicate-selected"
-                className="flex items-center gap-2"
-                title="Duplicate selected rows"
-              >
-                <Copy className="h-4 w-4" />
-                Duplicate selected ({selected.size})
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={deleteSelected}
-                disabled={selected.size === 0}
-                data-testid="button-delete-selected"
-                className="flex items-center gap-2 text-red-600 hover:text-red-700 hover:bg-red-50"
-                title="Delete selected rows"
-              >
-                <Trash2 className="h-4 w-4" />
-                Delete selected ({selected.size})
-              </Button>
-              {selected.size > 0 && (
-                <span className="text-xs text-gray-600">
-                  {selected.size} row{selected.size > 1 ? 's' : ''} selected
-                </span>
-              )}
+            <div className="flex items-center justify-between gap-3 mb-4 p-2 bg-gray-50 border border-gray-200 rounded-lg">
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => addRow()}
+                  data-testid="button-add-row"
+                  className="flex items-center gap-2"
+                  title="Add row (Alt+Insert)"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add row
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={duplicateSelected}
+                  disabled={selected.size === 0}
+                  data-testid="button-duplicate-selected"
+                  className="flex items-center gap-2"
+                  title="Duplicate selected rows (Ctrl+D)"
+                >
+                  <Copy className="h-4 w-4" />
+                  Duplicate ({selected.size})
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={fillDown}
+                  disabled={selected.size < 2}
+                  data-testid="button-fill-down"
+                  className="flex items-center gap-2"
+                  title="Fill down from first selected row (Ctrl+Shift+F)"
+                >
+                  <ChevronDown className="h-4 w-4" />
+                  Fill Down
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={deleteSelected}
+                  disabled={selected.size === 0}
+                  data-testid="button-delete-selected"
+                  className="flex items-center gap-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+                  title="Delete selected rows"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Delete ({selected.size})
+                </Button>
+                
+                <div className="w-px h-6 bg-gray-300 mx-2" />
+                
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={undo}
+                  disabled={historyIndex <= 0}
+                  data-testid="button-undo"
+                  className="flex items-center gap-1"
+                  title="Undo (Ctrl+Z)"
+                >
+                  <Undo className="h-4 w-4" />
+                  Undo
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={redo}
+                  disabled={historyIndex >= history.length - 1}
+                  data-testid="button-redo"
+                  className="flex items-center gap-1"
+                  title="Redo (Ctrl+Y)"
+                >
+                  <Redo className="h-4 w-4" />
+                  Redo
+                </Button>
+              </div>
+              
+              <div className="flex items-center gap-3">
+                {selected.size > 0 && (
+                  <span className="text-xs text-gray-600">
+                    {selected.size} row{selected.size > 1 ? 's' : ''} selected
+                  </span>
+                )}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowShortcuts(!showShortcuts)}
+                  className="text-gray-600"
+                  title="Show keyboard shortcuts"
+                >
+                  <HelpCircle className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
+            
+            {/* Keyboard shortcuts help */}
+            {showShortcuts && (
+              <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm">
+                <div className="font-semibold mb-2">Keyboard Shortcuts:</div>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div><span className="font-mono bg-white px-1 rounded">Alt+Insert</span> - Add new row</div>
+                  <div><span className="font-mono bg-white px-1 rounded">Ctrl+D</span> - Duplicate selected</div>
+                  <div><span className="font-mono bg-white px-1 rounded">Ctrl+Shift+F</span> - Fill down</div>
+                  <div><span className="font-mono bg-white px-1 rounded">Delete</span> - Delete selected</div>
+                  <div><span className="font-mono bg-white px-1 rounded">Ctrl+Z</span> - Undo</div>
+                  <div><span className="font-mono bg-white px-1 rounded">Ctrl+Y</span> - Redo</div>
+                </div>
+              </div>
+            )}
 
             <div className="border border-gray-300 rounded-lg overflow-hidden">
               <table className="w-full border-collapse">
@@ -635,6 +844,7 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
                           <DateCellInput
                             value={row.date}
                             onCommit={(iso) => {
+                              saveToHistory();
                               const updated = [...rows];
                               updated[index] = { ...row, date: iso };
                               setRows(updated);
@@ -648,6 +858,7 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
                           <QuarterHoursInput
                             value={parseFloat(row.hours) || 0}
                             onCommit={(value) => {
+                              saveToHistory();
                               const updated = [...rows];
                               updated[index] = { ...row, hours: value.toString() };
                               setRows(updated);

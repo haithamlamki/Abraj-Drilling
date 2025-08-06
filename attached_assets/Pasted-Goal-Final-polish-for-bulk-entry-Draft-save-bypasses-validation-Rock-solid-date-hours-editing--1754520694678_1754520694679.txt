@@ -1,0 +1,99 @@
+Goal: Final polish for bulk entry.
+
+Draft save bypasses validation
+
+Rock-solid date & hours editing
+
+Type change won’t wipe unrelated fields
+
+Quality-of-life: multi-duplicate, fill-down, keyboard shortcuts, undo
+
+markdown
+Copy
+Edit
+You are in DOCTOR MODE. Make the following changes end-to-end. Provide unified diffs and screenshots.
+
+A) SAVE AS DRAFT (no validation)
+1) Frontend: on "Save as Draft" button, POST to `/api/npt-reports/bulk?mode=draft` with the rows as-is. Do NOT run Zod validation client-side.
+2) Backend:
+   - Add `buildNptSchema(mode: "draft" | "review")`.
+   - For `mode=draft`, accept partial fields (all optional), and only coerce `hours` to 0.25 steps if provided. No business-rule validation.
+   - Persist with status = `DRAFT`.
+   - For `mode=review`, use the strict existing schema + superRefine rules (N2 windows, Investigation ≥ 6.0, Contractual vs Abraj).
+   - Return `{ok:true, saved:N}`.
+
+B) DATE INPUT (buffer + commit onBlur)
+1) Create `DateCellInput.tsx` that buffers typed text and parses only onBlur/Enter:
+   - Accept "DD/MM/YYYY" while typing; commit ISO "YYYY-MM-DD" if valid, else empty.
+   - Do NOT clear on partial input.
+2) Replace date cell usage in single + bulk forms with DateCellInput.
+3) Derive month/year from date only on commit (not on each keystroke).
+
+C) HOURS INPUT (quarter-hour snap onBlur)
+1) Create `QuarterHoursInput.tsx`:
+   - Buffer typed text; onBlur/Enter → clamp [0..24] and snap to nearest 0.25.
+   - Keep `inputMode="decimal"`; never block typing during `onChange`.
+2) Replace hours cells in single + bulk with QuarterHoursInput.
+3) Keep the small suggestions menu (0, 0.5) if present.
+
+D) NPT TYPE SWITCH — CLEANUP ONLY LOCKED FIELDS
+1) Ensure `cleanupByType(row)` clears ONLY these when disabled for the current type:
+   - `contractualProcess` (disabled in Abraj)
+   - Equipment/Failure/Cause group (`equipment`, `thePart`, `failureDesc`, `rootCause`, `corrective`, `futureAction`, `actionParty`) when disabled for Contractual
+   - Do NOT touch `date`, `hours`, `system`, `n2Number`, `wellName`.
+2) On NPT type change in both forms:
+   - Apply `cleanupByType` and update the same row; do not recreate the entire row; keep key stable.
+
+E) GRID QoL
+1) Toolbar:
+   - "Duplicate selected" already exists: support multi-select duplication, inserting a copy right after each selected row.
+   - Add "Fill down" button: if multiple rows selected, copy non-empty cells from the first selected row into all other selected rows, but only for fields that are enabled by `enabledFields(nptType)`.
+2) Keyboard shortcuts:
+   - **Ctrl+D / Cmd+D** → duplicate the last selected row.
+   - **Alt+Insert** → add row.
+   - **Ctrl+Shift+F** → fill down from current row to the next selected rows.
+   - Show a small “?” tooltip with the shortcuts above.
+3) Undo/Redo (local):
+   - Maintain a simple stack (max 20 steps). Add tiny “Undo / Redo” buttons near the toolbar.
+4) Per-row actions:
+   - Keep 📄 (duplicate), 🗑 (delete). Add title attributes for accessibility.
+
+F) REGRESSION CHECKS
+1) Submit for Review: strict rules enforced (Contractual Process for Contractual; Equipment/Failure/Cause for Abraj; N2 window; Investigation ≥ 6.0).
+2) Save as Draft: succeeds even with empty/partial rows.
+3) Date typing no longer clears while editing; hours snap only on blur.
+4) Type switching preserves Date/Hours/System/N2; only locked group gets cleared.
+5) Provide screenshots:
+   - Typing date partially then blurring (value persists).
+   - Saving a draft with empty fields.
+   - Switching type (fields preserved/cleared correctly).
+   - Fill-down + Undo/Redo demo.
+
+Return: diffs for all changed files and the screenshots. Stop and wait for my review.
+✅ Quick QA checklist (run after the patch)
+Date cell: type 01/08/2025 step-by-step; it shouldn’t clear while typing; on blur it commits.
+
+Hours cell: type 1.37; on blur it snaps to 1.25 (or nearest 0.25), stays within 0..24.
+
+Switch NPT Type:
+
+Contractual → Abraj: Contractual Process clears; equipment/failure/cause become editable.
+
+Abraj → Contractual: equipment/failure/cause clear; Contractual Process editable.
+
+Date, Hours, System, N2, Well Name remain untouched.
+
+Save as Draft: works even with blank/partial rows; Dashboard shows status Draft.
+
+Submit for Review: shows field-level reasons if requirements aren’t met.
+
+Fill down: select 3 rows → copy non-empty editable cells to the others; Undo works.
+
+Shortcuts:
+
+Ctrl/Cmd+D duplicates selected row
+
+Alt+Insert adds row
+
+Ctrl+Shift+F fill down
+

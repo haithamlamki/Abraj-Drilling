@@ -27,16 +27,16 @@ The platform serves different user roles (drilling managers, supervisors, and ad
 - **Enhanced Monthly Reports Module**: Integrated delivery tracking directly into existing monthly NPT reporting workflow
 - **Comprehensive Storage Layer**: Extended IStorage interface with complete CRUD operations for delivery and alert management
 
-### Latest Enhancement (January 6, 2025)
-- **QuarterHourField Implementation**: Enhanced NPT reporting with precise 15-minute time entry:
-  - Created QuarterHourField component for precise hour entry with quarter-hour validation (0.25 steps)
-  - Implemented time utility functions (clamp, snapQuarter, quarters, isQuarter) for consistent validation
-  - Enhanced NPT form with automatic quarter-hour snapping on blur
-  - Added backend API validation to reject non-quarter-hour values
-  - Created comprehensive time demo page showing both compact and full selector components
-  - Updated form validation schema to enforce quarter-hour compliance using Zod refinement
-  - Range validation: 0-24 hours with automatic clamping
-  - User-friendly interface: type any value, automatically snaps to nearest 0.25
+### Latest Enhancement (January 6, 2025 - 11:00 PM)
+- **Complete Bulk NPT Entry Polish**: Comprehensive enhancements to the NPT bulk entry form:
+  - **Draft Mode Implementation**: Backend conditional validation supports draft saves (minimal validation) vs review submission (full validation)
+  - **Enhanced Input Controls**: DateCellInput with stable date-fns formatting, QuarterHoursInput with buffer-on-blur pattern
+  - **Undo/Redo System**: Full history management with 20-step undo/redo, keyboard shortcuts (Ctrl+Z/Y), visual buttons in toolbar
+  - **Fill-Down Feature**: Select multiple rows and fill values from first row (Ctrl+Shift+F), respects field editability rules
+  - **Keyboard Shortcuts Suite**: Alt+Insert (add row), Ctrl+D (duplicate), Ctrl+Shift+F (fill down), Ctrl+Z/Y (undo/redo)
+  - **Improved Toolbar**: Added Fill Down, Undo, Redo buttons with visual indicators and help button for shortcuts reference
+  - **History Tracking**: All grid operations (add, duplicate, delete, field changes) tracked for complete undo/redo support
+  - **Smart Fill-Down Logic**: Only copies enabled fields based on NPT type rules, maintains data integrity
 
 ### Previous Enhancement (January 6, 2025)
 - **Custom Email/Password Authentication**: Complete replacement of Replit Auth with custom login system:
