@@ -13,6 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CheckCircle, XCircle, Clock, Eye, MessageSquare, Filter } from "lucide-react";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import type { NptReport, Rig, System } from "@shared/schema";
 import { NPT_STATUS } from "@shared/status";
 
@@ -51,7 +52,8 @@ export default function ApprovalsPage() {
             ? NPT_STATUS.REJECTED
             : NPT_STATUS.DRAFT;
       
-      const response = await apiRequest(`/api/approvals/list?status=${status}`);
+      const url = `/api/approvals/list?status=${encodeURIComponent(status)}`;
+      const response = await apiRequest(url);
       return response.items || [];
     },
     enabled: isAuthenticated 
@@ -75,7 +77,7 @@ export default function ApprovalsPage() {
     mutationFn: async (reportId: number) => 
       apiRequest(`/api/approvals/${reportId}/approve`, {
         method: 'POST',
-        body: JSON.stringify({ action: "APPROVE" }),
+        data: { action: "APPROVE" },
       }),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['/api/approvals/list'] });
@@ -92,7 +94,7 @@ export default function ApprovalsPage() {
     mutationFn: async ({ reportId, reason }: { reportId: number; reason: string }) => 
       apiRequest(`/api/approvals/${reportId}/approve`, {
         method: 'POST',
-        body: JSON.stringify({ action: "REJECT", comment: reason }),
+        data: { action: "REJECT", comment: reason },
       }),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['/api/approvals/list'] });
@@ -112,7 +114,7 @@ export default function ApprovalsPage() {
         method: 'POST',
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/npt-reports'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/approvals/list'] });
       toast({
         title: "Success",
         description: "Report submitted for approval"

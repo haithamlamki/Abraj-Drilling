@@ -8,19 +8,33 @@ async function throwIfResNotOk(res: Response) {
 }
 
 export async function apiRequest(
-  method: string,
   url: string,
-  data?: unknown | undefined,
-): Promise<Response> {
+  options: { method?: string; body?: string; data?: any; headers?: Record<string, string> } = {}
+): Promise<any> {
+  const { method = "GET", body, data, headers = {} } = options;
+
   const res = await fetch(url, {
     method,
-    headers: data ? { "Content-Type": "application/json" } : {},
-    body: data ? JSON.stringify(data) : undefined,
+    headers: {
+      ...(data || body ? { "Content-Type": "application/json" } : {}),
+      ...headers,
+    },
+    body: body || (data !== undefined ? JSON.stringify(data) : undefined),
     credentials: "include",
   });
 
-  await throwIfResNotOk(res);
-  return res;
+  // Normalize JSON/text responses and bubble up server validation errors
+  const ct = res.headers.get("content-type") || "";
+  
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(`${res.status}: ${res.statusText} ${errorText}`);
+  }
+  
+  if (ct.includes("application/json")) {
+    return await res.json();
+  }
+  return await res.text();
 }
 
 type UnauthorizedBehavior = "returnNull" | "throw";
@@ -30,7 +44,7 @@ export const getQueryFn: <T>(options: {
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
     // Handle query keys that are arrays - only use the first element as the URL
-    const url = Array.isArray(queryKey) ? queryKey[0] as string : queryKey as string;
+    const url = Array.isArray(queryKey) ? String(queryKey[0]) : String(queryKey);
     const res = await fetch(url, {
       credentials: "include",
     });

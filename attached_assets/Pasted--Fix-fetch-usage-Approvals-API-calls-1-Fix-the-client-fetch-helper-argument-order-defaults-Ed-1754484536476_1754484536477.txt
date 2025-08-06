@@ -1,0 +1,117 @@
+ Fix fetch usage + Approvals API calls
+1) Fix the client fetch helper (argument order + defaults)
+Edit: client/src/lib/queryClient.ts
+
+Replace the fetch function with:
+
+ts
+Copy code
+// client/src/lib/queryClient.ts
+export async function apiFetch(
+  url: string,
+  options: { method?: string; data?: any; headers?: Record<string, string> } = {}
+) {
+  const { method = "GET", data, headers = {} } = options;
+
+  const res = await fetch(url, {
+    method,
+    headers: {
+      ...(data ? { "Content-Type": "application/json" } : {}),
+      ...headers,
+    },
+    body: data !== undefined ? JSON.stringify(data) : undefined,
+    credentials: "include",
+  });
+
+  // Normalize JSON/text responses and bubble up server validation errors
+  const ct = res.headers.get("content-type") || "";
+  const payload = ct.includes("application/json") ? await res.json() : await res.text();
+
+  if (!res.ok) {
+    // Expect backend to send { errors: {...} } for validation issues
+    throw payload;
+  }
+  return payload;
+}
+Important: All call sites should call apiFetch(url, { method, data }).
+Do not pass the URL as method.
+
+2) Fix Approvals page calls (use URL as first arg)
+Edit: client/src/pages/approvals.tsx (or the file that fetches the approvals list)
+
+Import the helper and status constants:
+
+ts
+Copy code
+import { apiFetch } from "@/lib/queryClient";
+import { NPT_STATUS } from "@/shared/status"; // or "@/shared/workflow"
+Build the URL correctly and encode the status:
+
+ts
+Copy code
+const [status, setStatus] = useState(NPT_STATUS.PENDING_REVIEW);
+
+const url = `/api/approvals/list?status=${encodeURIComponent(status)}`;
+
+// SWR example
+const { data, error, isLoading } = useSWR(url, (u) => apiFetch(u));
+
+// OR without SWR
+useEffect(() => {
+  apiFetch(url).then(setList).catch(setError);
+}, [url]);
+If any existing code looks like apiFetch({ method: '/api/approvals/list?...' }) or apiFetch(method, url), change it to apiFetch(url, { method: 'GET' }) or simply apiFetch(url).
+
+3) Use standardized status values (no spaces)
+You previously standardized to NPT_STATUS.PENDING_REVIEW. Make sure both client & server use that constant, not the label "Pending Review".
+
+Client: send PENDING_REVIEW:
+
+ts
+Copy code
+const url = `/api/approvals/list?status=${encodeURIComponent(NPT_STATUS.PENDING_REVIEW)}`;
+Server: accept it:
+
+ts
+Copy code
+// server/routes/approvals.ts
+import { NPT_STATUS } from "../../shared/status";
+
+router.get("/api/approvals/list", async (req, res) => {
+  const status = String(req.query.status || NPT_STATUS.PENDING_REVIEW);
+  // ... use status as-is against DB (after your data backfill)
+});
+4) Quick sanity checks (search & fix bad calls)
+Ask Replit AI to run these searches and fix misuses:
+
+Find wrong fetch usage:
+
+perl
+Copy code
+grep -RIn "apiFetch(" client | sed -n '1,200p'
+Look for any call where first argument is an object or where method contains a URL—fix to apiFetch(url, { method, data }).
+
+Find places still using spaced labels:
+
+perl
+Copy code
+grep -RIn "Pending Review" client server
+Replace with NPT_STATUS.PENDING_REVIEW (and update DB/backfill if needed).
+
+5) Test
+Reload the app (clear cache if needed).
+
+Open Approvals → It should fetch /api/approvals/list?status=PENDING_REVIEW without errors.
+
+Counters and list should populate.
+
+Approve/Reject one item → list updates as expected.
+
+6) (Optional, but recommended) Guard in helper
+To catch this early next time, add a small runtime check in apiFetch:
+
+ts
+Copy code
+if (typeof url !== "string" || url.startsWith("http") === false && !url.startsWith("/")) {
+  console.warn("apiFetch called with non-URL first argument:", url);
+}
