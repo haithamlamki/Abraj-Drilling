@@ -1,0 +1,106 @@
+Department is editable only when NPT Type = Abraj.
+
+Contractual Process must be enabled when NPT Type = Contractual.
+(System can stay editable in both.)
+
+Below are the minimal changes (copy-paste).
+
+1) Update the shared rule (single source of truth)
+shared/nptRules.ts
+
+ts
+Copy code
+export function enabledFields(nptType?: string) {
+  const C = isContractual(nptType);
+  const A = isAbraj(nptType);
+  return {
+    system: true,                  // keep editable in both
+    department: A,                 // <-- only editable for Abraj
+    contractualProcess: C,         // <-- only editable for Contractual
+
+    // Equipment/Failure/Cause group (editable only in Abraj):
+    equipment: A,
+    thePart: A,
+    failureDesc: A,
+    rootCause: A,
+    corrective: A,
+    futureAction: A,
+    actionParty: A,
+
+    n2Number: true,                // editable; requirement stays conditional
+  } as const;
+}
+
+/** Wipe values of fields that are disabled for the current type */
+export function cleanupByType<T extends Record<string, any>>(row: T): T {
+  const e = enabledFields(row.nptType);
+  const out = { ...row };
+
+  if (!e.contractualProcess) out.contractualProcess = "";
+
+  if (!e.department) out.department = "";       // <-- clear when not editable
+
+  if (!e.equipment) {
+    out.equipment = "";
+    out.thePart = ""; out.failureDesc = ""; out.rootCause = "";
+    out.corrective = ""; out.futureAction = ""; out.actionParty = "";
+  }
+  return out;
+}
+Note: With department disabled for Contractual, the N2 requirement will not trigger for Contractual rows (because department becomes empty). If you want a different behavior, tell me and I’ll adjust the N2 logic.
+
+2) Single form — wire disabled props
+tsx
+Copy code
+const ef = enabledFields(watch("nptType"));
+useEffect(() => setValueMany(cleanupByType(getValues())), [watch("nptType")]);
+
+<Select  /* Department */
+  value={watch("department")}
+  onValueChange={(v)=> setValue("department", v, { shouldValidate: true })}
+  disabled={!ef.department}
+/>
+
+<Input   /* Contractual Process */
+  value={watch("contractualProcess") ?? ""}
+  onChange={(e)=> setValue("contractualProcess", e.target.value, { shouldValidate: true })}
+  disabled={!ef.contractualProcess}
+/>
+3) Bulk grid — predicates per column
+ts
+Copy code
+import { enabledFields, cleanupByType } from "@/shared/nptRules";
+
+const cols = [
+  { field: "system",             editable: () => true },
+  { field: "department",         editable: p => enabledFields(p.data.nptType).department },       // only Abraj
+  { field: "contractualProcess", editable: p => enabledFields(p.data.nptType).contractualProcess },// only Contractual
+  { field: "equipment",          editable: p => enabledFields(p.data.nptType).equipment },
+  { field: "thePart",            editable: p => enabledFields(p.data.nptType).thePart },
+  { field: "failureDesc",        editable: p => enabledFields(p.data.nptType).failureDesc },
+  { field: "rootCause",          editable: p => enabledFields(p.data.nptType).rootCause },
+  { field: "corrective",         editable: p => enabledFields(p.data.nptType).corrective },
+  { field: "futureAction",       editable: p => enabledFields(p.data.nptType).futureAction },
+  { field: "actionParty",        editable: p => enabledFields(p.data.nptType).actionParty },
+  { field: "n2Number",           editable: () => true },
+];
+
+function onCellValueChanged({ data, colDef }) {
+  if (colDef.field === "nptType") {
+    const cleaned = cleanupByType(data);
+    gridApi.applyTransaction({ update: [cleaned] });
+  }
+}
+4) Validation (frontend & backend) — no rule change needed
+Keep existing Contractual vs Abraj required fields.
+
+N2 remains conditional by department + hours. Since department is cleared for Contractual, N2 won’t be required there (expected under your new rule).
+
+Investigation Report still required for hours ≥ 6.0.
+
+5) Quick visual test
+Row with Contractual → Contractual Process enabled; Department disabled/cleared; equipment/failure/cause disabled.
+
+Row with Abraj → Department enabled; Contractual Process disabled/cleared; equipment/failure/cause enabled.
+
+Submit: rules above enforced; server still normalizes/wipes disabled fields.

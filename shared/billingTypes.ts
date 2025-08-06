@@ -1,64 +1,40 @@
-// Types for billing sheet processing
+// Types for billing sheet processing and NPT generation
+
 export interface BillingSheetRow {
-  rigNumber: string;
-  date: Date;
-  year: number;
-  month: string;
-  hours: number;
-  nbtType: 'Abroad' | 'Contractual';
-  rateType: 'Repair Rate' | 'Reduce Repair Rate' | 'Zero Rate' | 'Operation Rate' | 'Operating Rate' | 'Reduced Rate' | 'Rig Move Statistical' | 'Other';
-  description: string;
-  wellName?: string;
-  extractedEquipment?: string;
-  extractedSystem?: string;
-  extractedFailure?: string;
-  confidence?: number;
-  nptReportData?: NptReportData;
-}
-
-export interface NptReportData {
-  rigId: string;
-  date: string;
-  hours: number;
-  nptType: 'Abroad' | 'Contractual';
-  wellName?: string;
-  status: 'Draft';
-  // Contractual fields
-  contractualProcess?: string;
-  // Abraj fields
+  rigNumber?: string;
+  date?: string | Date;
+  year?: string;
+  month?: string;
+  hours?: number | string;
+  rateType?: string;
+  description?: string;
+  nbtType?: string;
   system?: string;
-  parentEquipment?: string;
-  partEquipment?: string;
-  department?: string;
-  immediateCause?: string;
-  rootCause?: string;
-  correctiveAction?: string;
-  futureAction?: string;
-  actionParty?: string;
-  notificationNumber?: string;
-  investigationReport?: string;
-}
-
-export interface BillingUploadResult {
-  fileName: string;
-  totalRows: number;
-  processedRows: number;
-  errors: string[];
-  extractedData: BillingSheetRow[];
-  recognitionSummary: {
-    repairRateRows: number;
-    reducedRateRows: number;
-    zeroRateRows: number;
-    contractualRows: number;
-    abroadRows: number;
+  ticketNumber?: string;
+  extractedSystem?: string;
+  extractedEquipment?: string;
+  extractedFailure?: string;
+  extractedData?: {
+    description?: string;
+    system?: string;
+    equipment?: string;
   };
 }
 
-export interface BillingSheetUpload {
-  id: string;
+export interface ProcessedBillingData {
   fileName: string;
-  uploadDate: Date;
-  uploadedBy: string;
-  status: 'Processing' | 'Completed' | 'Failed';
-  result?: BillingUploadResult;
+  uploadedAt: Date;
+  extractedRows: BillingSheetRow[];
+  processingStatus: 'completed' | 'processing' | 'failed';
+  errorMessage?: string;
+}
+
+export interface BillingUpload {
+  id: number;
+  fileName: string;
+  originalName: string;
+  uploadedAt: Date;
+  extractedRows: BillingSheetRow[];
+  processingStatus: string;
+  errorMessage?: string;
 }

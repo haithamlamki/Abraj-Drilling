@@ -475,9 +475,13 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
                             name={`rows.${index}.department`}
                             render={({ field }) => (
                               <FormItem>
-                                <Select onValueChange={field.onChange} value={field.value || undefined}>
+                                <Select 
+                                  onValueChange={field.onChange} 
+                                  value={field.value || undefined}
+                                  disabled={!enabledFieldsState.department}
+                                >
                                   <FormControl>
-                                    <SelectTrigger className="h-8 text-xs border-0 rounded-none">
+                                    <SelectTrigger className={`h-8 text-xs border-0 rounded-none ${!enabledFieldsState.department ? 'bg-gray-100 opacity-50' : ''}`}>
                                       <SelectValue placeholder="Select..." />
                                     </SelectTrigger>
                                   </FormControl>

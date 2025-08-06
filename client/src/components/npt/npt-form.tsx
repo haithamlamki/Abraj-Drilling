@@ -26,7 +26,8 @@ import {
   getInvestigationRequirementHelp
 } from "@shared/nptRules";
 import { NPT_STATUS } from "@shared/status";
-import type { Rig, System, Equipment, Department, ActionParty, BillingSheetRow } from "@shared/schema";
+import type { Rig, System, Equipment, Department, ActionParty } from "@shared/schema";
+import type { BillingSheetRow } from "@shared/billingTypes";
 
 // Define validation schema
 const baseSchema = z.object({
@@ -122,7 +123,7 @@ export default function NptForm() {
   const editId = urlParams.get('edit');
 
   // Fetch existing report data if editing
-  const { data: existingReport } = useQuery({
+  const { data: existingReport } = useQuery<FormData>({
     queryKey: ['/api/npt-reports', editId],
     enabled: !!editId,
   });
@@ -174,10 +175,10 @@ export default function NptForm() {
     
     // Otherwise, use default values with billing data if available
     const baseValues = {
-      rigId: user?.rigId || (billingData?.rigNumber ? parseInt(billingData.rigNumber) : null),
+      rigId: user?.rigId || (billingData?.rigNumber ? parseInt(billingData.rigNumber) : 0),
       userId: user?.id || "",
       date: billingData?.date ? new Date(billingData.date).toISOString().split('T')[0] : "",
-      hours: billingData?.hours || 0,
+      hours: typeof billingData?.hours === 'number' ? billingData.hours : (typeof billingData?.hours === 'string' ? parseFloat(billingData.hours) || 0 : 0),
       nptType: billingData?.nbtType || "",
       system: "",
       equipment: "",
@@ -230,7 +231,8 @@ export default function NptForm() {
   });
 
   // Memoize enabled fields based on current NPT type
-  const enabledFieldsState = useMemo(() => enabledFields(form.watch("nptType")), [form.watch("nptType")]);
+  const watchedNptType = form.watch("nptType");
+  const enabledFieldsState = useMemo(() => enabledFields(watchedNptType), [watchedNptType]);
 
   // Update form when billing data is loaded
   useEffect(() => {
@@ -250,7 +252,7 @@ export default function NptForm() {
       Object.keys(values).forEach((key) => {
         form.setValue(key as any, values[key as keyof typeof values]);
       });
-      setSelectedNptType(existingReport.nptType || "");
+      setSelectedNptType(existingReport?.nptType || "");
     }
   }, [existingReport]);
 
@@ -296,17 +298,25 @@ export default function NptForm() {
     mutationFn: async (data: FormData & { status?: string }) => {
       if (editId) {
         // Update existing report
-        return await apiRequest(`/api/npt-reports/${editId}`, 'PUT', {
-          ...data,
-          date: new Date(data.date).toISOString(),
-          status: data.status || "Draft",
+        return await apiRequest(`/api/npt-reports/${editId}`, {
+          method: 'PUT',
+          body: JSON.stringify({
+            ...data,
+            date: new Date(data.date).toISOString(),
+            status: data.status || "Draft",
+          }),
+          headers: { 'Content-Type': 'application/json' }
         });
       } else {
         // Create new report
-        return await apiRequest('/api/npt-reports', 'POST', {
-          ...data,
-          date: new Date(data.date).toISOString(),
-          status: data.status || "Draft",
+        return await apiRequest('/api/npt-reports', {
+          method: 'POST',
+          body: JSON.stringify({
+            ...data,
+            date: new Date(data.date).toISOString(),
+            status: data.status || "Draft",
+          }),
+          headers: { 'Content-Type': 'application/json' }
         });
       }
     },
@@ -382,17 +392,25 @@ export default function NptForm() {
     mutationFn: async (data: FormData) => {
       if (editId) {
         // Update existing report
-        return await apiRequest(`/api/npt-reports/${editId}`, 'PUT', {
-          ...data,
-          date: new Date(data.date).toISOString(),
-          status: NPT_STATUS.PENDING_REVIEW,
+        return await apiRequest(`/api/npt-reports/${editId}`, {
+          method: 'PUT',
+          body: JSON.stringify({
+            ...data,
+            date: new Date(data.date).toISOString(),
+            status: NPT_STATUS.PENDING_REVIEW,
+          }),
+          headers: { 'Content-Type': 'application/json' }
         });
       } else {
         // Create new report
-        return await apiRequest('/api/npt-reports', 'POST', {
-          ...data,
-          date: new Date(data.date).toISOString(),
-          status: NPT_STATUS.PENDING_REVIEW,
+        return await apiRequest('/api/npt-reports', {
+          method: 'POST',
+          body: JSON.stringify({
+            ...data,
+            date: new Date(data.date).toISOString(),
+            status: NPT_STATUS.PENDING_REVIEW,
+          }),
+          headers: { 'Content-Type': 'application/json' }
         });
       }
     },
@@ -459,8 +477,7 @@ export default function NptForm() {
     },
   });
 
-  // Watch values to trigger conditional logic
-  const watchedNptType = form.watch("nptType");
+  // Watch values to trigger conditional logic  
   const watchedDepartment = form.watch("department");
   const watchedHours = form.watch("hours");
 
@@ -469,21 +486,6 @@ export default function NptForm() {
     setSelectedNptType(watchedNptType || "");
     setSelectedDepartment(watchedDepartment || "");
     setSelectedHours(watchedHours || 0);
-    
-    // Clean up fields based on NPT type
-    const cleanedValues = cleanupByType({
-      nptType: watchedNptType,
-      department: watchedDepartment,
-      hours: watchedHours,
-      ...form.getValues()
-    });
-    
-    // Update form with cleaned values
-    Object.keys(cleanedValues).forEach((key) => {
-      if (key !== 'nptType') {
-        form.setValue(key as any, cleanedValues[key as keyof typeof cleanedValues]);
-      }
-    });
   }, [watchedNptType, watchedDepartment, watchedHours]);
 
   // Calculate field states
@@ -792,11 +794,11 @@ export default function NptForm() {
                         <Select 
                           onValueChange={field.onChange} 
                           value={field.value || ''} 
-                          disabled={false}
+                          disabled={!enabledFieldsState.department}
                           data-testid="select-department"
                         >
                           <FormControl>
-                            <SelectTrigger className="h-8 text-xs border-0 rounded-none">
+                            <SelectTrigger className={`h-8 text-xs border-0 rounded-none ${!enabledFieldsState.department ? 'bg-gray-100 opacity-50' : ''}`}>
                               <SelectValue placeholder="Select" />
                             </SelectTrigger>
                           </FormControl>

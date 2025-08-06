@@ -16,23 +16,39 @@ export function needsN2(dept?: string, hrs?: number) {
 export const needsInvestigationReport = (hrs?: number) => (hrs ?? 0) >= 6.0;
 
 export function enabledFields(nptType?: string) {
-  const C = isContractual(nptType), A = isAbraj(nptType);
+  const C = isContractual(nptType);
+  const A = isAbraj(nptType);
+  
   return {
-    system: true,
-    contractualProcess: C,
-    equipment: A, thePart: A, failureDesc: A, rootCause: A,
-    corrective: A, futureAction: A, actionParty: A,
-    n2Number: true,
+    system: true,                  // keep editable in both
+    department: A,                 // only editable for Abraj
+    contractualProcess: C,         // only editable for Contractual
+
+    // Equipment/Failure/Cause group (editable only in Abraj):
+    equipment: A,
+    thePart: A,
+    failureDesc: A,
+    rootCause: A,
+    corrective: A,
+    futureAction: A,
+    actionParty: A,
+
+    n2Number: true,                // editable; requirement stays conditional
   } as const;
 }
 
 export function cleanupByType<T extends Record<string, any>>(row: T): T {
-  const e = enabledFields(row.nptType); 
+  const e = enabledFields(row.nptType);
   const out = { ...row };
-  
+
   if (!e.contractualProcess && 'contractualProcess' in out) {
     (out as any).contractualProcess = "";
   }
+
+  if (!e.department && 'department' in out) {       // clear when not editable
+    (out as any).department = "";
+  }
+
   if (!e.equipment && 'equipment' in out) {
     if ('equipment' in out) (out as any).equipment = "";
     if ('thePart' in out) (out as any).thePart = "";
@@ -48,7 +64,7 @@ export function cleanupByType<T extends Record<string, any>>(row: T): T {
 // Helper functions for UI feedback
 export const getDisabledFieldsHelp = (nptType?: string) => {
   if (isContractual(nptType)) {
-    return "Equipment/Failure/Cause fields are locked for Contractual NPT type.";
+    return "Equipment/Failure/Cause/Department fields are locked for Contractual NPT type.";
   }
   if (isAbraj(nptType)) {
     return "Contractual Process field is locked for Abraj NPT type.";
