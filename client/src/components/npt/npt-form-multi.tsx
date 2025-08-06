@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Form, FormControl, FormField, FormItem } from "@/components/ui/form";
+import { Form, FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -13,7 +13,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
-import { enabledFields, cleanupByType } from "@shared/nptRules";
+import { enabledFields, cleanupByType, needsN2, needsInvestigationReport, isContractual, isAbraj } from "@shared/nptRules";
 import type { BillingSheetRow } from "@shared/billingTypes";
 import { nanoid } from "nanoid";
 
@@ -42,12 +42,12 @@ type NptRow = {
 
 const nptRowSchema = z.object({
   id: z.string(),
-  rigNumber: z.string(),
-  date: z.string(),
-  year: z.string(),
-  month: z.string(),
-  hours: z.string(),
-  nptType: z.string(),
+  rigNumber: z.string().min(1, "Rig Number is required"),
+  date: z.string().min(1, "Date is required"),
+  year: z.string().min(1, "Year is required"),
+  month: z.string().min(1, "Month is required"),
+  hours: z.string().min(1, "Hours is required"),
+  nptType: z.string().min(1, "NPT Type is required"),
   system: z.string().optional(),
   equipment: z.string().optional(),
   partEquipment: z.string().optional(),
@@ -61,6 +61,61 @@ const nptRowSchema = z.object({
   wellName: z.string().optional(),
   notificationNumber: z.string().optional(),
   investigationWellName: z.string().optional(),
+}).superRefine((data, ctx) => {
+  const hours = parseFloat(data.hours);
+  const nptType = data.nptType;
+  
+  // NPT Type specific validations
+  if (isContractual(nptType)) {
+    if (!data.contractualProcess?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["contractualProcess"],
+        message: "Contractual Process is required for Contractual NPT type"
+      });
+    }
+  }
+  
+  if (isAbraj(nptType)) {
+    const requiredFields = [
+      { field: "equipment", label: "Equipment" },
+      { field: "partEquipment", label: "The Part" },
+      { field: "immediateCause", label: "Failure Description" },
+      { field: "rootCause", label: "Root Cause" },
+      { field: "correctiveAction", label: "Corrective Action" },
+      { field: "futureAction", label: "Future Action" },
+      { field: "actionParty", label: "Action Party" },
+      { field: "department", label: "Department" }
+    ] as const;
+    
+    for (const { field, label } of requiredFields) {
+      if (!data[field]?.trim()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [field],
+          message: `${label} is required for Abraj NPT type`
+        });
+      }
+    }
+  }
+  
+  // N2 Number validation
+  if (needsN2(data.department, hours) && !data.notificationNumber?.trim()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["notificationNumber"],
+      message: "N2 Number is required for this hours range and department"
+    });
+  }
+  
+  // Investigation Report validation
+  if (needsInvestigationReport(hours) && !data.investigationWellName?.trim()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["investigationWellName"],
+      message: "Investigation report is required for ≥ 6.0 hours"
+    });
+  }
 });
 
 const formSchema = z.object({
@@ -295,7 +350,10 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
 
       const response = await apiRequest('/api/npt-reports/from-billing', {
         method: 'POST',
-        body: { rows: billingRows }
+        body: JSON.stringify({ rows: billingRows }),
+        headers: {
+          'Content-Type': 'application/json'
+        }
       });
       return response;
     },
@@ -323,6 +381,39 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
 
   const handleSubmit = (data: FormData, submitForReview: boolean = false) => {
     console.log('handleSubmit called with:', { data, submitForReview });
+    
+    // If submitting for review, validate all fields thoroughly
+    if (submitForReview) {
+      const validationResult = formSchema.safeParse(data);
+      if (!validationResult.success) {
+        // Show validation errors
+        const errors = validationResult.error.flatten();
+        const errorMessages = [];
+        
+        // Collect all field errors
+        Object.entries(errors.fieldErrors).forEach(([field, messages]) => {
+          if (messages && messages.length > 0) {
+            errorMessages.push(`${field}: ${messages.join(', ')}`);
+          }
+        });
+        
+        // Collect form errors
+        if (errors.formErrors.length > 0) {
+          errorMessages.push(...errors.formErrors);
+        }
+        
+        toast({
+          title: "Validation Errors",
+          description: `Please fix the following errors before submitting for review:\n${errorMessages.slice(0, 5).join('\n')}${errorMessages.length > 5 ? '\n...and more' : ''}`,
+          variant: "destructive",
+        });
+        
+        // Force form validation to show errors
+        form.trigger();
+        return;
+      }
+    }
+    
     setIsSubmittingForReview(submitForReview);
     createReportsMutation.mutate(data);
   };
@@ -618,7 +709,7 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
                           <FormField
                             control={form.control}
                             name={`rows.${index}.equipment`}
-                            render={({ field }) => (
+                            render={({ field, fieldState }) => (
                               <FormItem>
                                 <Select 
                                   onValueChange={field.onChange} 
@@ -626,7 +717,7 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
                                   disabled={!enabledFieldsState.equipment}
                                 >
                                   <FormControl>
-                                    <SelectTrigger className={`h-8 text-xs border-0 rounded-none ${!enabledFieldsState.equipment ? 'bg-gray-100 opacity-50' : ''}`}>
+                                    <SelectTrigger className={`h-8 text-xs border-0 rounded-none ${!enabledFieldsState.equipment ? 'bg-gray-100 opacity-50' : ''} ${fieldState.error ? 'border-red-500 bg-red-50' : ''}`}>
                                       <SelectValue placeholder="Select..." />
                                     </SelectTrigger>
                                   </FormControl>
@@ -638,6 +729,9 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
                                     ))}
                                   </SelectContent>
                                 </Select>
+                                {fieldState.error && (
+                                  <FormMessage className="text-xs text-red-600 mt-1" />
+                                )}
                               </FormItem>
                             )}
                           />
@@ -667,15 +761,18 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
                           <FormField
                             control={form.control}
                             name={`rows.${index}.contractualProcess`}
-                            render={({ field }) => (
+                            render={({ field, fieldState }) => (
                               <FormItem>
                                 <FormControl>
                                   <Input 
                                     {...field} 
                                     disabled={!enabledFieldsState.contractualProcess}
-                                    className={`h-8 text-xs border-0 rounded-none ${!enabledFieldsState.contractualProcess ? 'bg-gray-100 opacity-50' : ''}`} 
+                                    className={`h-8 text-xs border-0 rounded-none ${!enabledFieldsState.contractualProcess ? 'bg-gray-100 opacity-50' : ''} ${fieldState.error ? 'border-red-500 bg-red-50' : ''}`} 
                                   />
                                 </FormControl>
+                                {fieldState.error && (
+                                  <FormMessage className="text-xs text-red-600 mt-1" />
+                                )}
                               </FormItem>
                             )}
                           />
@@ -716,15 +813,18 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
                           <FormField
                             control={form.control}
                             name={`rows.${index}.immediateCause`}
-                            render={({ field }) => (
+                            render={({ field, fieldState }) => (
                               <FormItem>
                                 <FormControl>
                                   <Input 
                                     {...field} 
                                     disabled={!enabledFieldsState.failureDesc}
-                                    className={`h-8 text-xs border-0 rounded-none ${!enabledFieldsState.failureDesc ? 'bg-gray-100 opacity-50' : ''}`} 
+                                    className={`h-8 text-xs border-0 rounded-none ${!enabledFieldsState.failureDesc ? 'bg-gray-100 opacity-50' : ''} ${fieldState.error ? 'border-red-500 bg-red-50' : ''}`} 
                                   />
                                 </FormControl>
+                                {fieldState.error && (
+                                  <FormMessage className="text-xs text-red-600 mt-1" />
+                                )}
                               </FormItem>
                             )}
                           />
@@ -822,11 +922,17 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
                           <FormField
                             control={form.control}
                             name={`rows.${index}.notificationNumber`}
-                            render={({ field }) => (
+                            render={({ field, fieldState }) => (
                               <FormItem>
                                 <FormControl>
-                                  <Input {...field} className="h-8 text-xs border-0 rounded-none" />
+                                  <Input 
+                                    {...field} 
+                                    className={`h-8 text-xs border-0 rounded-none ${fieldState.error ? 'border-red-500 bg-red-50' : ''}`} 
+                                  />
                                 </FormControl>
+                                {fieldState.error && (
+                                  <FormMessage className="text-xs text-red-600 mt-1" />
+                                )}
                               </FormItem>
                             )}
                           />
@@ -837,11 +943,17 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
                           <FormField
                             control={form.control}
                             name={`rows.${index}.investigationWellName`}
-                            render={({ field }) => (
+                            render={({ field, fieldState }) => (
                               <FormItem>
                                 <FormControl>
-                                  <Input {...field} className="h-8 text-xs border-0 rounded-none" />
+                                  <Input 
+                                    {...field} 
+                                    className={`h-8 text-xs border-0 rounded-none ${fieldState.error ? 'border-red-500 bg-red-50' : ''}`} 
+                                  />
                                 </FormControl>
+                                {fieldState.error && (
+                                  <FormMessage className="text-xs text-red-600 mt-1" />
+                                )}
                               </FormItem>
                             )}
                           />
