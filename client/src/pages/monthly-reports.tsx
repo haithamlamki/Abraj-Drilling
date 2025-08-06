@@ -57,8 +57,8 @@ export default function MonthlyReports() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
-  const [selectedRig, setSelectedRig] = useState<string>('');
-  const [selectedStatus, setSelectedStatus] = useState<string>('');
+  const [selectedRig, setSelectedRig] = useState<string>('all');
+  const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [selectedMonth, setSelectedMonth] = useState<string>('');
   const [actionDialogOpen, setActionDialogOpen] = useState(false);
   const [actionType, setActionType] = useState<'submit' | 'approve' | 'reject' | 'resubmit'>('submit');
@@ -71,8 +71,8 @@ export default function MonthlyReports() {
     queryKey: ['/api/monthly-reports', selectedRig, selectedStatus, selectedMonth],
     queryFn: () => {
       const params = new URLSearchParams();
-      if (selectedRig) params.append('rigId', selectedRig);
-      if (selectedStatus) params.append('status', selectedStatus);
+      if (selectedRig && selectedRig !== 'all') params.append('rigId', selectedRig);
+      if (selectedStatus && selectedStatus !== 'all') params.append('status', selectedStatus);
       if (selectedMonth) params.append('month', selectedMonth);
       
       return apiRequest(`/api/monthly-reports?${params.toString()}`);
@@ -89,7 +89,7 @@ export default function MonthlyReports() {
     queryKey: ['/api/lifecycle/kpis', selectedRig],
     queryFn: () => {
       const params = new URLSearchParams();
-      if (selectedRig) params.append('rigId', selectedRig);
+      if (selectedRig && selectedRig !== 'all') params.append('rigId', selectedRig);
       return apiRequest(`/api/lifecycle/kpis?${params.toString()}`);
     }
   });
@@ -298,7 +298,7 @@ export default function MonthlyReports() {
                   <SelectValue placeholder="All Rigs" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Rigs</SelectItem>
+                  <SelectItem value="all">All Rigs</SelectItem>
                   {rigs.map((rig) => (
                     <SelectItem key={rig.id} value={rig.id.toString()}>
                       Rig {rig.rigNumber} - {rig.section}
@@ -314,7 +314,7 @@ export default function MonthlyReports() {
                   <SelectValue placeholder="All Statuses" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Statuses</SelectItem>
+                  <SelectItem value="all">All Statuses</SelectItem>
                   <SelectItem value="Draft">Draft</SelectItem>
                   <SelectItem value="Submitted">Submitted</SelectItem>
                   <SelectItem value="In_Review">In Review</SelectItem>
@@ -336,8 +336,8 @@ export default function MonthlyReports() {
               <Button
                 variant="outline"
                 onClick={() => {
-                  setSelectedRig('');
-                  setSelectedStatus('');
+                  setSelectedRig('all');
+                  setSelectedStatus('all');
                   setSelectedMonth('');
                 }}
                 data-testid="button-clear-filters"

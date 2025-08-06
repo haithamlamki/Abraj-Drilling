@@ -66,7 +66,7 @@ export default function MonthlyTimeline() {
   const [editingDay, setEditingDay] = useState<Date | null>(null);
   const [dayData, setDayData] = useState({
     hours: '',
-    nptType: '',
+    nptType: 'none',
     notes: '',
     dayStatus: 'Draft' as const
   });
@@ -170,7 +170,7 @@ export default function MonthlyTimeline() {
     const slice = getDaySlice(date);
     setDayData({
       hours: slice?.hours || '',
-      nptType: slice?.nptType || '',
+      nptType: slice?.nptType || 'none',
       notes: slice?.notes || '',
       dayStatus: slice?.dayStatus || 'Draft'
     });
@@ -381,7 +381,7 @@ export default function MonthlyTimeline() {
                   <SelectValue placeholder="Select NPT Type" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">None</SelectItem>
+                  <SelectItem value="none">None</SelectItem>
                   <SelectItem value="Contractual">Contractual</SelectItem>
                   <SelectItem value="Operational">Operational</SelectItem>
                   <SelectItem value="Abraj">Abraj</SelectItem>
