@@ -13,7 +13,7 @@ import { processPDFBilling, enhanceBillingRowWithNPTData } from "./pdfProcessor"
 import { workflowService } from "./workflowService";
 import { lifecycleService } from "./lifecycleService";
 import { approvalService } from "./approvalService";
-import { serverNptReportSchema, insertRigSchema, insertSystemSchema, insertEquipmentSchema, insertDepartmentSchema, insertActionPartySchema, insertReportDeliverySchema, insertAlertRuleSchema, insertDelegationSchema, insertRoleAssignmentSchema } from "@shared/schema";
+import { serverNptReportSchema, insertNptReportSchema, insertRigSchema, insertSystemSchema, insertEquipmentSchema, insertDepartmentSchema, insertActionPartySchema, insertReportDeliverySchema, insertAlertRuleSchema, insertDelegationSchema, insertRoleAssignmentSchema } from "@shared/schema";
 import workflowRouter from "./routes/workflows";
 import { NPT_STATUS } from "@shared/status";
 import type { BillingSheetRow } from "@shared/billingTypes";
