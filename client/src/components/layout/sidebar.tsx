@@ -38,6 +38,11 @@ export default function Sidebar() {
       label: "Reports Dashboard",
     },
     {
+      href: "/monthly-reports",
+      icon: "fas fa-calendar-alt",
+      label: "Monthly Reports",
+    },
+    {
       href: "/approvals",
       icon: "fas fa-check-circle",
       label: "Approvals",

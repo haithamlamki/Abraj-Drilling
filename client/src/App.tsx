@@ -14,6 +14,8 @@ import PendingApprovals from "@/pages/pending-approvals";
 import NptReportDetail from "@/pages/npt-report-detail";
 import Settings from "@/pages/settings";
 import Reports from "@/pages/reports";
+import MonthlyReports from "@/pages/monthly-reports";
+import MonthlyTimeline from "@/pages/monthly-timeline";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -33,6 +35,8 @@ function Router() {
           <Route path="/approvals" component={Approvals} />
           <Route path="/pending-approvals" component={PendingApprovals} />
           <Route path="/reports" component={Reports} />
+          <Route path="/monthly-reports" component={MonthlyReports} />
+          <Route path="/monthly-reports/:id/timeline" component={MonthlyTimeline} />
           <Route path="/settings" component={Settings} />
         </>
       )}

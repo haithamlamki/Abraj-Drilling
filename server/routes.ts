@@ -5,6 +5,7 @@ import { setupAuth, isAuthenticated } from "./replitAuth";
 import { BillingProcessor } from "./billingProcessor";
 import { processPDFBilling, enhanceBillingRowWithNPTData } from "./pdfProcessor";
 import { workflowService } from "./workflowService";
+import { lifecycleService } from "./lifecycleService";
 import { insertNptReportSchema, insertSystemSchema, insertEquipmentSchema, insertDepartmentSchema, insertActionPartySchema } from "@shared/schema";
 import type { BillingSheetRow } from "@shared/billingTypes";
 import { z } from "zod";
@@ -1007,6 +1008,237 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error submitting report for approval:", error);
       res.status(500).json({ message: "Failed to submit report for approval" });
+    }
+  });
+
+  // =============================================================================
+  // LIFECYCLE TRACKING ROUTES (Monthly NPT Reports with daily granularity)
+  // =============================================================================
+
+  // Get all monthly reports with filtering
+  app.get('/api/monthly-reports', isAuthenticated, async (req: any, res) => {
+    try {
+      const { rigId, month, status } = req.query;
+      const filters: any = {};
+      if (rigId) filters.rigId = parseInt(rigId);
+      if (month) filters.month = month;
+      if (status) filters.status = status;
+
+      const reports = await storage.getMonthlyReports(filters);
+      res.json(reports);
+    } catch (error) {
+      console.error("Error fetching monthly reports:", error);
+      res.status(500).json({ message: "Failed to fetch monthly reports" });
+    }
+  });
+
+  // Get specific monthly report
+  app.get('/api/monthly-reports/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const reportId = parseInt(req.params.id);
+      const report = await storage.getMonthlyReport(reportId);
+      
+      if (!report) {
+        return res.status(404).json({ message: "Monthly report not found" });
+      }
+
+      res.json(report);
+    } catch (error) {
+      console.error("Error fetching monthly report:", error);
+      res.status(500).json({ message: "Failed to fetch monthly report" });
+    }
+  });
+
+  // Create or get monthly report for a specific month/rig
+  app.post('/api/monthly-reports', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { month, rigId } = req.body;
+
+      if (!month || !rigId) {
+        return res.status(400).json({ message: "Month and rigId are required" });
+      }
+
+      const report = await lifecycleService.getOrCreateMonthlyReport(month, rigId, userId);
+      res.json(report);
+    } catch (error) {
+      console.error("Error creating monthly report:", error);
+      res.status(500).json({ message: "Failed to create monthly report" });
+    }
+  });
+
+  // Submit monthly report for approval
+  app.post('/api/monthly-reports/:id/submit', isAuthenticated, async (req: any, res) => {
+    try {
+      const reportId = parseInt(req.params.id);
+      const userId = req.user.claims.sub;
+      const { comments } = req.body;
+
+      const report = await lifecycleService.submitReport(reportId, userId, comments);
+      res.json(report);
+    } catch (error) {
+      console.error("Error submitting monthly report:", error);
+      res.status(400).json({ message: error.message || "Failed to submit monthly report" });
+    }
+  });
+
+  // Approve monthly report
+  app.post('/api/monthly-reports/:id/approve', isAuthenticated, async (req: any, res) => {
+    try {
+      const reportId = parseInt(req.params.id);
+      const userId = req.user.claims.sub;
+      const { comments } = req.body;
+      
+      // Check if user has approval permissions
+      const user = await storage.getUser(userId);
+      if (!user || !['admin', 'supervisor'].includes(user.role?.toLowerCase() || '')) {
+        return res.status(403).json({ message: "Only supervisors and admins can approve reports" });
+      }
+
+      const report = await lifecycleService.approveReport(reportId, userId, comments);
+      res.json(report);
+    } catch (error) {
+      console.error("Error approving monthly report:", error);
+      res.status(400).json({ message: error.message || "Failed to approve monthly report" });
+    }
+  });
+
+  // Reject monthly report
+  app.post('/api/monthly-reports/:id/reject', isAuthenticated, async (req: any, res) => {
+    try {
+      const reportId = parseInt(req.params.id);
+      const userId = req.user.claims.sub;
+      const { reason } = req.body;
+
+      if (!reason) {
+        return res.status(400).json({ message: "Rejection reason is required" });
+      }
+      
+      // Check if user has approval permissions
+      const user = await storage.getUser(userId);
+      if (!user || !['admin', 'supervisor'].includes(user.role?.toLowerCase() || '')) {
+        return res.status(403).json({ message: "Only supervisors and admins can reject reports" });
+      }
+
+      const report = await lifecycleService.rejectReport(reportId, userId, reason);
+      res.json(report);
+    } catch (error) {
+      console.error("Error rejecting monthly report:", error);
+      res.status(400).json({ message: error.message || "Failed to reject monthly report" });
+    }
+  });
+
+  // Resubmit rejected report
+  app.post('/api/monthly-reports/:id/resubmit', isAuthenticated, async (req: any, res) => {
+    try {
+      const reportId = parseInt(req.params.id);
+      const userId = req.user.claims.sub;
+      const { comments } = req.body;
+
+      const report = await lifecycleService.resubmitReport(reportId, userId, comments);
+      res.json(report);
+    } catch (error) {
+      console.error("Error resubmitting monthly report:", error);
+      res.status(400).json({ message: error.message || "Failed to resubmit monthly report" });
+    }
+  });
+
+  // Get timeline data for a monthly report (day slices + stage events)
+  app.get('/api/monthly-reports/:id/timeline', isAuthenticated, async (req: any, res) => {
+    try {
+      const reportId = parseInt(req.params.id);
+      const timelineData = await lifecycleService.getTimelineData(reportId);
+      res.json(timelineData);
+    } catch (error) {
+      console.error("Error fetching timeline data:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch timeline data" });
+    }
+  });
+
+  // Update day slice
+  app.put('/api/monthly-reports/:id/days/:date', isAuthenticated, async (req: any, res) => {
+    try {
+      const reportId = parseInt(req.params.id);
+      const date = new Date(req.params.date);
+      const userId = req.user.claims.sub;
+      const dayData = req.body;
+
+      const daySlice = await lifecycleService.updateDaySlice(reportId, date, dayData, userId);
+      res.json(daySlice);
+    } catch (error) {
+      console.error("Error updating day slice:", error);
+      res.status(500).json({ message: "Failed to update day slice" });
+    }
+  });
+
+  // Link NPT reports to a specific day
+  app.post('/api/monthly-reports/:id/days/:date/link-npt', isAuthenticated, async (req: any, res) => {
+    try {
+      const reportId = parseInt(req.params.id);
+      const date = new Date(req.params.date);
+      const userId = req.user.claims.sub;
+      const { nptReportIds } = req.body;
+
+      const daySlice = await lifecycleService.linkNptReportToDay(reportId, date, nptReportIds, userId);
+      res.json(daySlice);
+    } catch (error) {
+      console.error("Error linking NPT reports to day:", error);
+      res.status(500).json({ message: "Failed to link NPT reports to day" });
+    }
+  });
+
+  // Get KPIs and analytics
+  app.get('/api/lifecycle/kpis', isAuthenticated, async (req: any, res) => {
+    try {
+      const { rigId, startMonth, endMonth } = req.query;
+      const filters: any = {};
+      if (rigId) filters.rigId = parseInt(rigId);
+      if (startMonth) filters.startMonth = startMonth;
+      if (endMonth) filters.endMonth = endMonth;
+
+      const kpis = await lifecycleService.getKPIs(filters);
+      res.json(kpis);
+    } catch (error) {
+      console.error("Error fetching KPIs:", error);
+      res.status(500).json({ message: "Failed to fetch KPIs" });
+    }
+  });
+
+  // Get user notifications
+  app.get('/api/notifications', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { unreadOnly } = req.query;
+      
+      const notifications = await storage.getNotifications(userId, unreadOnly === 'true');
+      res.json(notifications);
+    } catch (error) {
+      console.error("Error fetching notifications:", error);
+      res.status(500).json({ message: "Failed to fetch notifications" });
+    }
+  });
+
+  // Mark notification as read
+  app.put('/api/notifications/:id/read', isAuthenticated, async (req: any, res) => {
+    try {
+      const notificationId = parseInt(req.params.id);
+      await storage.markNotificationAsRead(notificationId);
+      res.json({ message: "Notification marked as read" });
+    } catch (error) {
+      console.error("Error marking notification as read:", error);
+      res.status(500).json({ message: "Failed to mark notification as read" });
+    }
+  });
+
+  // Mark all notifications as read
+  app.put('/api/notifications/read-all', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      await storage.markAllNotificationsAsRead(userId);
+      res.json({ message: "All notifications marked as read" });
+    } catch (error) {
+      console.error("Error marking all notifications as read:", error);
+      res.status(500).json({ message: "Failed to mark all notifications as read" });
     }
   });
 

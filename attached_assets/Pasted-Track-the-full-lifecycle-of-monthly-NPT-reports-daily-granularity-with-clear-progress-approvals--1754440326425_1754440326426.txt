@@ -1,0 +1,71 @@
+Track the full lifecycle of monthly NPT reports (daily granularity) with clear progress, approvals, alerts, and analytics. Data entry is manual.
+
+Core Objects
+
+Report: id, month, rig, created_by, status {Draft, Submitted, In_Review, Approved, Rejected}, sla_days, totals (hours by type), created_at, updated_at.
+
+StageEvent (audit log): report_id, stage {Created, Submitted, Reviewed, Approved, Rejected}, by_user, at.
+
+DaySlice (timeline): report_id, date, day_status {No-Entry, Draft, Submitted, In_Review, Approved}, notes.
+
+Notification: id, report_id, rule, recipient, sent_at, channel.
+
+Workflow
+
+Draft → Submit → In Review → Approve/Reject (with comment).
+
+Rejected → back to Draft (resubmit keeps history).
+
+Every action writes a StageEvent.
+
+Timeline (per month / per report)
+
+Horizontal day timeline (1..31); color by status:
+Draft=gray, Submitted=blue, In_Review=yellow, Approved=green, Late/Over-SLA=red border.
+
+Inline notes per day; click to open the row in the NPT grid you already use.
+
+Alerts (auto)
+
+Pending Approval > X hrs (e.g., 48h) → notify approver.
+
+Report over SLA (Created→Approved > sla_days) → notify owner + manager.
+
+Expected day missing entry (configurable calendar) → notify owner end of day.
+
+Stalled (no StageEvent in 24h while not Approved) → notify owner.
+
+Dashboards
+
+Daily view: reports touched today; who owns next action.
+
+Weekly/Monthly: Gantt per report; status heatmap (rows=rations/reports, cols=days).
+
+KPIs: Total Reports, Total NPT Hours, % Approved on time, Avg Review Time, Over-SLA count.
+
+Breakdowns: by Rig, Department, NPT Type (Contractual/Operational/etc.).
+
+Exports
+
+CSV/XLSX of reports + stages + timeline; monthly PDF summary (KPIs + heatmap + late items).
+
+Roles
+
+Owner/Editor (enter & submit), Reviewer, Approver, Admin (all + SLA rules & recipients).
+
+Quality
+
+Mandatory comment on Reject.
+
+Every stage change must create a StageEvent (immutable).
+
+All lists filterable by Rig/Month/Status.
+
+AI (optional, phase 2)
+
+ETA prediction for approval based on history.
+
+Anomaly alerts (unusual delays/hours).
+
+NLP tags for Failure Description to surface recurring issues.
+

@@ -8,6 +8,11 @@ import {
   departments,
   actionParties,
   workflowApprovals,
+  monthlyReports,
+  stageEvents,
+  daySlices,
+  notifications,
+  slaRules,
   type User,
   type UpsertUser,
   type Rig,
@@ -24,6 +29,16 @@ import {
   type InsertActionParty,
   type WorkflowApproval,
   type InsertWorkflowApproval,
+  type MonthlyReport,
+  type InsertMonthlyReport,
+  type StageEvent,
+  type InsertStageEvent,
+  type DaySlice,
+  type InsertDaySlice,
+  type Notification,
+  type InsertNotification,
+  type SlaRule,
+  type InsertSlaRule,
 } from "@shared/schema";
 import type { BillingSheetUpload, BillingUploadResult } from "@shared/billingTypes";
 import { db } from "./db";
@@ -384,6 +399,171 @@ export class DatabaseStorage implements IStorage {
       .from(workflowApprovals)
       .where(eq(workflowApprovals.reportId, reportId))
       .orderBy(workflowApprovals.createdAt);
+  }
+
+  // Monthly Reports (Lifecycle tracking)
+  async getMonthlyReports(filters?: { rigId?: number; month?: string; status?: string }): Promise<MonthlyReport[]> {
+    const conditions = [];
+    if (filters?.rigId) conditions.push(eq(monthlyReports.rigId, filters.rigId));
+    if (filters?.month) conditions.push(eq(monthlyReports.month, filters.month));
+    if (filters?.status) conditions.push(eq(monthlyReports.status, filters.status));
+    
+    if (conditions.length > 0) {
+      return await db.select().from(monthlyReports).where(and(...conditions)).orderBy(desc(monthlyReports.createdAt));
+    }
+    
+    return await db.select().from(monthlyReports).orderBy(desc(monthlyReports.createdAt));
+  }
+
+  async getMonthlyReport(id: number): Promise<MonthlyReport | undefined> {
+    const [report] = await db.select().from(monthlyReports).where(eq(monthlyReports.id, id));
+    return report;
+  }
+
+  async getMonthlyReportByMonthAndRig(month: string, rigId: number): Promise<MonthlyReport | undefined> {
+    const [report] = await db.select().from(monthlyReports)
+      .where(and(eq(monthlyReports.month, month), eq(monthlyReports.rigId, rigId)));
+    return report;
+  }
+
+  async createMonthlyReport(report: InsertMonthlyReport): Promise<MonthlyReport> {
+    const [newReport] = await db.insert(monthlyReports).values(report).returning();
+    return newReport;
+  }
+
+  async updateMonthlyReport(id: number, report: Partial<MonthlyReport>): Promise<MonthlyReport> {
+    const [updatedReport] = await db
+      .update(monthlyReports)
+      .set({ ...report, updatedAt: new Date() })
+      .where(eq(monthlyReports.id, id))
+      .returning();
+    return updatedReport;
+  }
+
+  async deleteMonthlyReport(id: number): Promise<void> {
+    await db.delete(monthlyReports).where(eq(monthlyReports.id, id));
+  }
+
+  // Stage Events (Audit log)
+  async createStageEvent(event: InsertStageEvent): Promise<StageEvent> {
+    const [newEvent] = await db.insert(stageEvents).values(event).returning();
+    return newEvent;
+  }
+
+  async getStageEvents(reportId: number): Promise<StageEvent[]> {
+    return await db
+      .select()
+      .from(stageEvents)
+      .where(eq(stageEvents.reportId, reportId))
+      .orderBy(stageEvents.createdAt);
+  }
+
+  async getLatestStageEvent(reportId: number): Promise<StageEvent | undefined> {
+    const [event] = await db
+      .select()
+      .from(stageEvents)
+      .where(eq(stageEvents.reportId, reportId))
+      .orderBy(desc(stageEvents.createdAt))
+      .limit(1);
+    return event;
+  }
+
+  // Day Slices (Daily timeline)
+  async getDaySlices(reportId: number): Promise<DaySlice[]> {
+    return await db
+      .select()
+      .from(daySlices)
+      .where(eq(daySlices.reportId, reportId))
+      .orderBy(daySlices.date);
+  }
+
+  async getDaySlice(reportId: number, date: Date): Promise<DaySlice | undefined> {
+    const [slice] = await db.select().from(daySlices)
+      .where(and(eq(daySlices.reportId, reportId), eq(daySlices.date, date)));
+    return slice;
+  }
+
+  async createDaySlice(slice: InsertDaySlice): Promise<DaySlice> {
+    const [newSlice] = await db.insert(daySlices).values({
+      ...slice,
+      lastUpdated: new Date()
+    }).returning();
+    return newSlice;
+  }
+
+  async updateDaySlice(id: number, slice: Partial<DaySlice>): Promise<DaySlice> {
+    const [updatedSlice] = await db
+      .update(daySlices)
+      .set({ ...slice, lastUpdated: new Date() })
+      .where(eq(daySlices.id, id))
+      .returning();
+    return updatedSlice;
+  }
+
+  async upsertDaySlice(reportId: number, date: Date, data: Partial<DaySlice>): Promise<DaySlice> {
+    const existing = await this.getDaySlice(reportId, date);
+    
+    if (existing) {
+      return this.updateDaySlice(existing.id, data);
+    } else {
+      return this.createDaySlice({
+        reportId,
+        date,
+        ...data
+      } as InsertDaySlice);
+    }
+  }
+
+  // Notifications
+  async createNotification(notification: InsertNotification): Promise<Notification> {
+    const [newNotification] = await db.insert(notifications).values(notification).returning();
+    return newNotification;
+  }
+
+  async getNotifications(userId: string, unreadOnly?: boolean): Promise<Notification[]> {
+    const conditions = [eq(notifications.recipient, userId)];
+    if (unreadOnly) {
+      conditions.push(eq(notifications.isRead, false));
+    }
+    
+    return await db
+      .select()
+      .from(notifications)
+      .where(and(...conditions))
+      .orderBy(desc(notifications.sentAt));
+  }
+
+  async markNotificationAsRead(id: number): Promise<void> {
+    await db
+      .update(notifications)
+      .set({ isRead: true })
+      .where(eq(notifications.id, id));
+  }
+
+  async markAllNotificationsAsRead(userId: string): Promise<void> {
+    await db
+      .update(notifications)
+      .set({ isRead: true })
+      .where(eq(notifications.recipient, userId));
+  }
+
+  // SLA Rules
+  async getSlaRules(): Promise<SlaRule[]> {
+    return await db.select().from(slaRules).where(eq(slaRules.isActive, true));
+  }
+
+  async createSlaRule(rule: InsertSlaRule): Promise<SlaRule> {
+    const [newRule] = await db.insert(slaRules).values(rule).returning();
+    return newRule;
+  }
+
+  async updateSlaRule(id: number, rule: Partial<SlaRule>): Promise<SlaRule> {
+    const [updatedRule] = await db
+      .update(slaRules)
+      .set({ ...rule, updatedAt: new Date() })
+      .where(eq(slaRules.id, id))
+      .returning();
+    return updatedRule;
   }
   
   async getReportsByApprover(approverRole: string): Promise<NptReport[]> {

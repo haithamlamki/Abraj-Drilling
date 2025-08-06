@@ -110,6 +110,93 @@ export const workflowApprovals = pgTable("workflow_approvals", {
   index("idx_workflow_approvals_approver").on(table.approverId),
 ]);
 
+// Monthly NPT Report tracking (aggregation of daily entries)
+export const monthlyReports = pgTable("monthly_reports", {
+  id: serial("id").primaryKey(),
+  month: varchar("month", { length: 7 }).notNull(), // YYYY-MM format
+  rigId: integer("rig_id").references(() => rigs.id).notNull(),
+  createdBy: varchar("created_by").references(() => users.id).notNull(),
+  status: varchar("status").notNull().default('Draft'), // Draft, Submitted, In_Review, Approved, Rejected
+  slaDays: integer("sla_days").default(7), // SLA in days for approval
+  totalHours: decimal("total_hours", { precision: 10, scale: 2 }).default('0'),
+  contractualHours: decimal("contractual_hours", { precision: 10, scale: 2 }).default('0'),
+  operationalHours: decimal("operational_hours", { precision: 10, scale: 2 }).default('0'),
+  abrajHours: decimal("abraj_hours", { precision: 10, scale: 2 }).default('0'),
+  notes: text("notes"),
+  rejectionReason: text("rejection_reason"),
+  approvedBy: varchar("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  submittedAt: timestamp("submitted_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_monthly_reports_month_rig").on(table.month, table.rigId),
+  index("idx_monthly_reports_status").on(table.status),
+]);
+
+// Stage Events (audit log for report lifecycle)
+export const stageEvents = pgTable("stage_events", {
+  id: serial("id").primaryKey(),
+  reportId: integer("report_id").references(() => monthlyReports.id).notNull(),
+  stage: varchar("stage").notNull(), // Created, Submitted, Reviewed, Approved, Rejected, Resubmitted
+  byUser: varchar("by_user").references(() => users.id).notNull(),
+  comments: text("comments"),
+  previousStage: varchar("previous_stage"),
+  metadata: jsonb("metadata"), // Additional data like approval time, etc.
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_stage_events_report").on(table.reportId),
+  index("idx_stage_events_stage").on(table.stage),
+  index("idx_stage_events_user").on(table.byUser),
+]);
+
+// Day Slices (daily timeline tracking)
+export const daySlices = pgTable("day_slices", {
+  id: serial("id").primaryKey(),
+  reportId: integer("report_id").references(() => monthlyReports.id).notNull(),
+  date: timestamp("date").notNull(), // Specific day within the month
+  dayStatus: varchar("day_status").notNull().default('No-Entry'), // No-Entry, Draft, Submitted, In_Review, Approved
+  hours: decimal("hours", { precision: 10, scale: 2 }).default('0'),
+  nptType: varchar("npt_type"), // Contractual, Operational, Abraj
+  notes: text("notes"),
+  nptReportIds: jsonb("npt_report_ids"), // Array of NPT report IDs for this day
+  lastUpdated: timestamp("last_updated").defaultNow(),
+  updatedBy: varchar("updated_by").references(() => users.id),
+}, (table) => [
+  index("idx_day_slices_report_date").on(table.reportId, table.date),
+  index("idx_day_slices_status").on(table.dayStatus),
+]);
+
+// Notifications for alerts and reminders
+export const notifications = pgTable("notifications", {
+  id: serial("id").primaryKey(),
+  reportId: integer("report_id").references(() => monthlyReports.id),
+  rule: varchar("rule").notNull(), // pending_approval, over_sla, missing_entry, stalled
+  recipient: varchar("recipient").references(() => users.id).notNull(),
+  message: text("message").notNull(),
+  channel: varchar("channel").default('email'), // email, in_app, sms
+  isRead: boolean("is_read").default(false),
+  sentAt: timestamp("sent_at").defaultNow(),
+  metadata: jsonb("metadata"), // Additional context data
+}, (table) => [
+  index("idx_notifications_recipient").on(table.recipient),
+  index("idx_notifications_rule").on(table.rule),
+  index("idx_notifications_sent").on(table.sentAt),
+]);
+
+// SLA Configuration
+export const slaRules = pgTable("sla_rules", {
+  id: serial("id").primaryKey(),
+  ruleName: varchar("rule_name").notNull(),
+  description: text("description"),
+  triggerCondition: varchar("trigger_condition").notNull(), // pending_approval, over_sla, missing_entry, stalled
+  thresholdHours: integer("threshold_hours").notNull(),
+  recipients: jsonb("recipients"), // Array of user IDs or roles
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Reference data tables
 export const systems = pgTable("systems", {
   id: serial("id").primaryKey(),
@@ -172,6 +259,57 @@ export const equipmentRelations = relations(equipment, ({ one }) => ({
   }),
 }));
 
+export const monthlyReportRelations = relations(monthlyReports, ({ one, many }) => ({
+  rig: one(rigs, {
+    fields: [monthlyReports.rigId],
+    references: [rigs.id],
+  }),
+  createdByUser: one(users, {
+    fields: [monthlyReports.createdBy],
+    references: [users.id],
+  }),
+  approvedByUser: one(users, {
+    fields: [monthlyReports.approvedBy],
+    references: [users.id],
+  }),
+  stageEvents: many(stageEvents),
+  daySlices: many(daySlices),
+  notifications: many(notifications),
+}));
+
+export const stageEventRelations = relations(stageEvents, ({ one }) => ({
+  report: one(monthlyReports, {
+    fields: [stageEvents.reportId],
+    references: [monthlyReports.id],
+  }),
+  user: one(users, {
+    fields: [stageEvents.byUser],
+    references: [users.id],
+  }),
+}));
+
+export const daySliceRelations = relations(daySlices, ({ one }) => ({
+  report: one(monthlyReports, {
+    fields: [daySlices.reportId],
+    references: [monthlyReports.id],
+  }),
+  updatedByUser: one(users, {
+    fields: [daySlices.updatedBy],
+    references: [users.id],
+  }),
+}));
+
+export const notificationRelations = relations(notifications, ({ one }) => ({
+  report: one(monthlyReports, {
+    fields: [notifications.reportId],
+    references: [monthlyReports.id],
+  }),
+  recipientUser: one(users, {
+    fields: [notifications.recipient],
+    references: [users.id],
+  }),
+}));
+
 // Zod schemas
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
@@ -209,6 +347,33 @@ export const insertActionPartySchema = createInsertSchema(actionParties).omit({
   id: true,
 });
 
+export const insertMonthlyReportSchema = createInsertSchema(monthlyReports).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertStageEventSchema = createInsertSchema(stageEvents).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertDaySliceSchema = createInsertSchema(daySlices).omit({
+  id: true,
+  lastUpdated: true,
+});
+
+export const insertNotificationSchema = createInsertSchema(notifications).omit({
+  id: true,
+  sentAt: true,
+});
+
+export const insertSlaRuleSchema = createInsertSchema(slaRules).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Types
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
@@ -225,5 +390,19 @@ export type Equipment = typeof equipment.$inferSelect;
 export type InsertEquipment = z.infer<typeof insertEquipmentSchema>;
 export type Department = typeof departments.$inferSelect;
 export type InsertDepartment = z.infer<typeof insertDepartmentSchema>;
+export type ActionParty = typeof actionParties.$inferSelect;
+export type InsertActionParty = z.infer<typeof insertActionPartySchema>;
+
+// Lifecycle tracking types
+export type MonthlyReport = typeof monthlyReports.$inferSelect;
+export type InsertMonthlyReport = z.infer<typeof insertMonthlyReportSchema>;
+export type StageEvent = typeof stageEvents.$inferSelect;
+export type InsertStageEvent = z.infer<typeof insertStageEventSchema>;
+export type DaySlice = typeof daySlices.$inferSelect;
+export type InsertDaySlice = z.infer<typeof insertDaySliceSchema>;
+export type Notification = typeof notifications.$inferSelect;
+export type InsertNotification = z.infer<typeof insertNotificationSchema>;
+export type SlaRule = typeof slaRules.$inferSelect;
+export type InsertSlaRule = z.infer<typeof insertSlaRuleSchema>;
 export type ActionParty = typeof actionParties.$inferSelect;
 export type InsertActionParty = z.infer<typeof insertActionPartySchema>;
