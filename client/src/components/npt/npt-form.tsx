@@ -1,46 +1,51 @@
 import { useState, useEffect, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
-import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/hooks/useAuth";
-import { isUnauthorizedError } from "@/lib/authUtils";
-import { insertNptReportSchema } from "@shared/schema";
-import { nptEntrySchema } from "@/validation/nptEntry";
-import { isContractual, isAbraj, needsN2, needsInvestigationReport, enabledFields, cleanupByType, getDisabledFieldsHelp, getN2RequirementHelp, getInvestigationRequirementHelp, DEPARTMENTS } from "@shared/nptRules";
 import { z } from "zod";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@/hooks/useAuth";
+import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent } from "@/components/ui/card";
+import { Form, FormControl, FormField } from "@/components/ui/form";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
-import { Info, AlertTriangle, Upload } from "lucide-react";
-import type { System, Equipment, Department, ActionParty, InsertNptReport, Rig } from "@shared/schema";
-import type { BillingSheetRow } from "@shared/billingTypes";
-import QuarterHourField from "@/components/QuarterHourField";
-import { isQuarter } from "@/lib/time";
+import { Info, Loader2 } from "lucide-react";
+import { apiRequest } from "@/lib/queryClient";
+import { isUnauthorizedError } from "@/lib/authUtils";
+import { 
+  enabledFields, 
+  isAbraj, 
+  isContractual, 
+  needsN2, 
+  needsInvestigationReport,
+  cleanupByType,
+  getDisabledFieldsHelp,
+  getN2RequirementHelp,
+  getInvestigationRequirementHelp
+} from "@shared/nptRules";
 import { NPT_STATUS } from "@shared/status";
+import type { Rig, System, Equipment, Department, ActionParty, BillingSheetRow } from "@shared/schema";
 
-// Create a form schema with canonical field names
-const formSchema = z.object({
-  rigId: z.number().nullable().optional(),
-  userId: z.string().optional(),
+// Define validation schema
+const baseSchema = z.object({
+  rigId: z.number().min(1, "Rig is required"),
+  userId: z.string().min(1, "User is required"), 
   date: z.string().min(1, "Date is required"),
-  hours: z.number().min(0).max(24).refine(isQuarter, "Hours must be in 0.25 increments"),
+  hours: z.number().min(0.25, "Hours must be at least 0.25").max(24, "Hours cannot exceed 24").refine(
+    (val) => val % 0.25 === 0,
+    { message: "Hours must be in quarter-hour increments (0.25, 0.5, 0.75, etc.)" }
+  ),
   nptType: z.string().min(1, "NPT Type is required"),
-  system: z.string().min(1, "System is required"),
+  system: z.string().optional(),
   equipment: z.string().optional(),
   thePart: z.string().optional(),
   contractualProcess: z.string().optional(),
   department: z.string().min(1, "Department is required"),
-  failureDesc: z.string().optional(),
-  rootCause: z.string().optional(),
-  corrective: z.string().optional(),
+  failureDesc: z.string().min(1, "Failure Description is required"),
+  rootCause: z.string().min(1, "Root Cause is required"),
+  corrective: z.string().min(1, "Corrective Action is required"),
   futureAction: z.string().optional(),
   actionParty: z.string().optional(),
   notificationNumber: z.string().optional(),
@@ -50,38 +55,30 @@ const formSchema = z.object({
   investigationAiText: z.string().optional(),
   wellName: z.string().optional(),
   status: z.string().optional(),
-}).superRefine((data, ctx) => {
-  // Apply NPT type-based validation rules
-  if (isContractual(data.nptType)) {
-    if (!data.contractualProcess?.trim()) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["contractualProcess"],
-        message: "Contractual Process is required for Contractual NPT type."
-      });
-    }
+});
+
+// Add conditional validation
+const formSchema = baseSchema.superRefine((data, ctx) => {
+  // NPT Type validation
+  if (!data.nptType) return;
+  
+  const fields = enabledFields(data.nptType);
+  
+  // Check required fields are filled
+  if (fields.system && !data.system?.trim()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["system"],
+      message: "System is required for this NPT type."
+    });
   }
-
-  if (isAbraj(data.nptType)) {
-    const requiredFields = [
-      { field: "equipment", label: "Equipment" },
-      { field: "thePart", label: "The Part" },
-      { field: "failureDesc", label: "Failure Description" },
-      { field: "rootCause", label: "Root Cause" },
-      { field: "corrective", label: "Corrective Action" },
-      { field: "futureAction", label: "Future Action" },
-      { field: "actionParty", label: "Action Party" },
-    ] as const;
-
-    for (const { field, label } of requiredFields) {
-      if (!data[field]?.toString().trim()) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: [field],
-          message: `${label} is required for Abraj NPT type.`
-        });
-      }
-    }
+  
+  if (fields.equipment && !data.equipment?.trim()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["equipment"],
+      message: "Equipment is required for this NPT type."
+    });
   }
 
   // N2 conditional requirement
@@ -118,21 +115,12 @@ export default function NptForm() {
   const [selectedNptType, setSelectedNptType] = useState<string>("");
   const [selectedDepartment, setSelectedDepartment] = useState<string>("");
   const [selectedHours, setSelectedHours] = useState<number>(0);
-  
-  // Initialize form first
-  const form = useForm<FormData>({
-    resolver: zodResolver(formSchema),
-    defaultValues: () => getDefaultValues(),
-  });
-  
-  // Memoize enabled fields based on current NPT type
-  const enabledFieldsState = useMemo(() => enabledFields(form.watch("nptType")), [form.watch("nptType")]);
   const [billingData, setBillingData] = useState<BillingSheetRow | null>(null);
-  
+
   // Get edit parameter from URL
   const urlParams = new URLSearchParams(window.location.search);
   const editId = urlParams.get('edit');
-  
+
   // Fetch existing report data if editing
   const { data: existingReport } = useQuery({
     queryKey: ['/api/npt-reports', editId],
@@ -166,12 +154,12 @@ export default function NptForm() {
         nptType: existingReport.nptType || "",
         system: existingReport.system || "",
         equipment: existingReport.equipment || "",
-        thePart: existingReport.thePart || existingReport.parentEquipment || "",
+        thePart: existingReport.thePart || "",
         contractualProcess: existingReport.contractualProcess || "",
         department: existingReport.department || "",
-        failureDesc: existingReport.failureDesc || existingReport.immediateCause || "",
+        failureDesc: existingReport.failureDesc || "",
         rootCause: existingReport.rootCause || "",
-        corrective: existingReport.corrective || existingReport.correctiveAction || "",
+        corrective: existingReport.corrective || "",
         futureAction: existingReport.futureAction || "",
         actionParty: existingReport.actionParty || "",
         notificationNumber: existingReport.notificationNumber || "",
@@ -210,10 +198,12 @@ export default function NptForm() {
       status: "Draft",
     };
 
-    // Pre-populate fields based on NPT type and billing data
     if (billingData) {
       if (billingData.nbtType === 'Contractual') {
-        baseValues.contractualProcess = billingData.description || "";
+        // For Contractual, populate the contractual process field
+        if (billingData.extractedData?.description) {
+          baseValues.contractualProcess = billingData.extractedData.description;
+        }
         // If system is extracted (for contractual categories)
         if (billingData.extractedSystem) {
           baseValues.system = billingData.extractedSystem;
@@ -233,7 +223,14 @@ export default function NptForm() {
     return baseValues;
   };
 
-  // Form is initialized above before the useEffects
+  // Initialize form after getDefaultValues is defined
+  const form = useForm<FormData>({
+    resolver: zodResolver(formSchema),
+    defaultValues: getDefaultValues(),
+  });
+
+  // Memoize enabled fields based on current NPT type
+  const enabledFieldsState = useMemo(() => enabledFields(form.watch("nptType")), [form.watch("nptType")]);
 
   // Update form when billing data is loaded
   useEffect(() => {
@@ -462,19 +459,24 @@ export default function NptForm() {
     },
   });
 
-  // Watch for NPT type, department, and hours changes
+  // Watch values to trigger conditional logic
   const watchedNptType = form.watch("nptType");
   const watchedDepartment = form.watch("department");
   const watchedHours = form.watch("hours");
-  
+
+  // Update state when watched values change 
   useEffect(() => {
-    setSelectedNptType(watchedNptType);
-    setSelectedDepartment(watchedDepartment);
-    setSelectedHours(watchedHours);
+    setSelectedNptType(watchedNptType || "");
+    setSelectedDepartment(watchedDepartment || "");
+    setSelectedHours(watchedHours || 0);
     
-    // Apply field cleanup when NPT type changes
-    const formValues = form.getValues();
-    const cleanedValues = cleanupByType({ ...formValues, nptType: watchedNptType });
+    // Clean up fields based on NPT type
+    const cleanedValues = cleanupByType({
+      nptType: watchedNptType,
+      department: watchedDepartment,
+      hours: watchedHours,
+      ...form.getValues()
+    });
     
     // Update form with cleaned values
     Object.keys(cleanedValues).forEach((key) => {
@@ -926,46 +928,34 @@ export default function NptForm() {
                       name="n2Number"
                       render={({ field }) => (
                         <FormControl>
-                          <div className="relative">
-                            <Input 
-                              placeholder={showN2Field ? "Required" : "N2"}
-                              {...field}
-                              value={field.value || ''}
-                              className={`h-8 text-xs border-0 rounded-none text-center ${showN2Field ? 'border-orange-300 bg-orange-50' : ''}`}
-                              data-testid="input-n2-number"
-                            />
-                            {showN2Field && (
-                              <Badge variant="destructive" className="absolute -top-1 -right-1 text-xs px-1 py-0">
-                                REQ
-                              </Badge>
-                            )}
-                          </div>
+                          <Input 
+                            placeholder="N2"
+                            {...field}
+                            value={field.value || ''}
+                            disabled={!showN2Field}
+                            className={`h-8 text-xs border-0 rounded-none ${!showN2Field ? 'bg-gray-100 opacity-50' : ''}`}
+                            data-testid="input-n2-number"
+                          />
                         </FormControl>
                       )}
                     />
                   </div>
 
-                  {/* R - Investigation Report */}
+                  {/* R - Investigation */}
                   <div className="p-1 border-r border-gray-200">
                     <FormField
                       control={form.control}
-                      name="investigationFileId"
+                      name="investigationReport"
                       render={({ field }) => (
                         <FormControl>
-                          <div className="relative">
-                            <Input 
-                              placeholder={showInvestigationField ? "Required" : "Report"}
-                              {...field}
-                              value={field.value || ''}
-                              className={`h-8 text-xs border-0 rounded-none ${showInvestigationField ? 'border-red-300 bg-red-50' : ''}`}
-                              data-testid="input-investigation-file"
-                            />
-                            {showInvestigationField && (
-                              <Badge variant="destructive" className="absolute -top-1 -right-1 text-xs px-1 py-0">
-                                REQ
-                              </Badge>
-                            )}
-                          </div>
+                          <Input 
+                            placeholder="Investigation"
+                            {...field}
+                            value={field.value || ''}
+                            disabled={!showInvestigationField}
+                            className={`h-8 text-xs border-0 rounded-none ${!showInvestigationField ? 'bg-gray-100 opacity-50' : ''}`}
+                            data-testid="input-investigation-report"
+                          />
                         </FormControl>
                       )}
                     />
@@ -993,87 +983,27 @@ export default function NptForm() {
               </div>
             </div>
 
-            {/* Field Editability Help */}
-            {disabledFieldsHelp && (
-              <Alert className="mt-4">
-                <Info className="h-4 w-4" />
-                <AlertDescription>
-                  <div className="font-medium mb-2">Field Editability Rules:</div>
-                  <div className="space-y-1">
-                    {disabledFieldsHelp.split('\n').map((line, index) => (
-                      <div key={index} className="text-sm">
-                        {line}
-                      </div>
-                    ))}
-                  </div>
-                </AlertDescription>
-              </Alert>
-            )}
-
-            {/* Conditional Requirements Help */}
-            <div className="space-y-3 mt-4">
-              {/* N2 Number Requirement */}
-              {showN2Field && (
-                <Alert className="border-orange-200 bg-orange-50">
-                  <AlertTriangle className="h-4 w-4 text-orange-600" />
-                  <AlertDescription>
-                    <span className="font-medium text-orange-800">N2 Number Required:</span>
-                    <div className="text-orange-700 mt-1">
-                      {n2RequirementHelp}
-                    </div>
-                  </AlertDescription>
-                </Alert>
-              )}
-
-              {/* Investigation Report Requirement */}
-              {showInvestigationField && (
-                <Alert className="border-red-200 bg-red-50">
-                  <AlertTriangle className="h-4 w-4 text-red-600" />
-                  <AlertDescription>
-                    <span className="font-medium text-red-800">Investigation Report Required:</span>
-                    <div className="text-red-700 mt-1">
-                      {investigationRequirementHelp}
-                    </div>
-                  </AlertDescription>
-                </Alert>
-              )}
-            </div>
-
-            {/* Form Validation Errors */}
-            {Object.keys(form.formState.errors).length > 0 && (
-              <Alert variant="destructive" className="mt-4">
-                <AlertTriangle className="h-4 w-4" />
-                <AlertDescription>
-                  <div className="font-medium mb-2">Please fix the following errors:</div>
-                  <div className="space-y-1">
-                    {Object.entries(form.formState.errors).map(([field, error]) => (
-                      <div key={field} className="text-sm">
-                        • {error.message}
-                      </div>
-                    ))}
-                  </div>
-                </AlertDescription>
-              </Alert>
-            )}
-
-            {/* Form Actions */}
-            <div className="flex justify-end space-x-4 pt-4 border-t border-gray-200">
+            {/* Action Buttons */}
+            <div className="flex gap-2 pt-4 border-t border-gray-200">
               <Button 
-                type="button" 
-                variant="outline"
+                type="button"
+                variant="outline" 
                 onClick={onSaveDraft}
                 disabled={createReportMutation.isPending}
                 data-testid="button-save-draft"
               >
-                {createReportMutation.isPending ? "Saving..." : "Save as Draft"}
+                {createReportMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Save Draft
               </Button>
+              
               <Button 
                 type="button"
                 onClick={form.handleSubmit(onSubmitForReview)}
                 disabled={submitForReviewMutation.isPending}
                 data-testid="button-submit-review"
               >
-                {submitForReviewMutation.isPending ? "Submitting..." : "Submit for Review"}
+                {submitForReviewMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Submit for Review
               </Button>
             </div>
           </form>
