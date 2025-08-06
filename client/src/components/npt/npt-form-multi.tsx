@@ -16,6 +16,8 @@ import { useLocation } from "wouter";
 import { enabledFields, cleanupByType, needsN2, needsInvestigationReport, isContractual, isAbraj } from "@shared/nptRules";
 import type { BillingSheetRow } from "@shared/billingTypes";
 import { nanoid } from "nanoid";
+import DateCellInput from "@/components/npt/DateCellInput";
+import QuarterHoursInput from "@/components/npt/QuarterHoursInput";
 
 type NptRow = {
   id: string;
@@ -630,31 +632,27 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
 
                         {/* Date (D) */}
                         <td className="p-1 border-r border-gray-200">
-                          <FormField
-                            control={form.control}
-                            name={`rows.${index}.date`}
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormControl>
-                                  <Input {...field} type="date" className="h-8 text-xs border-0 rounded-none" />
-                                </FormControl>
-                              </FormItem>
-                            )}
+                          <DateCellInput
+                            value={row.date}
+                            onCommit={(iso) => {
+                              const updated = [...rows];
+                              updated[index] = { ...row, date: iso };
+                              setRows(updated);
+                            }}
+                            className="h-8 text-xs border-0 rounded-none"
                           />
                         </td>
 
                         {/* Hours (E) */}
                         <td className="p-1 border-r border-gray-200">
-                          <FormField
-                            control={form.control}
-                            name={`rows.${index}.hours`}
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormControl>
-                                  <Input {...field} className="h-8 text-xs border-0 rounded-none text-center" />
-                                </FormControl>
-                              </FormItem>
-                            )}
+                          <QuarterHoursInput
+                            value={parseFloat(row.hours) || 0}
+                            onCommit={(value) => {
+                              const updated = [...rows];
+                              updated[index] = { ...row, hours: value.toString() };
+                              setRows(updated);
+                            }}
+                            className="h-8 text-xs border-0 rounded-none text-center"
                           />
                         </td>
 
@@ -1010,8 +1008,9 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
 
             <div className="flex justify-end space-x-4 mt-6">
               <Button 
-                type="submit" 
+                type="button"
                 variant="outline"
+                onClick={() => form.handleSubmit((data) => handleSubmit(data, false))()}
                 disabled={createReportsMutation.isPending}
                 data-testid="button-save-draft"
               >

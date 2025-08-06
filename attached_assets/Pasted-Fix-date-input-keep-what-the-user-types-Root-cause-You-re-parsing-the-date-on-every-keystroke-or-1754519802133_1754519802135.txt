@@ -1,0 +1,236 @@
+Fix date input (keep what the user types)
+Root cause: You’re parsing the date on every keystroke (or deriving month/year), so partial text (e.g., 01/0) is considered “invalid” → component re-renders with empty value.
+Fix: Add a buffered input that only parses onBlur (or Enter). While typing, keep the raw string.
+
+1) Create a reusable date cell
+client/src/components/npt/DateCellInput.tsx
+
+tsx
+Copy
+Edit
+import { useEffect, useRef, useState } from "react";
+import dayjs from "dayjs";
+import customParseFormat from "dayjs/plugin/customParseFormat";
+dayjs.extend(customParseFormat);
+
+type Props = {
+  value?: string;                   // canonical ISO or "dd/MM/yyyy"
+  onCommit: (iso: string | "") => void; // commit ISO ("" means unset)
+  placeholder?: string;
+};
+
+export default function DateCellInput({ value, onCommit, placeholder = "dd/mm/yyyy" }: Props) {
+  // Show what's typed; do not parse until blur/Enter
+  const [buf, setBuf] = useState<string>(formatForInput(value));
+  const lastPropsValue = useRef(value);
+  useEffect(() => {
+    if (value !== lastPropsValue.current) {
+      setBuf(formatForInput(value));
+      lastPropsValue.current = value;
+    }
+  }, [value]);
+
+  function formatForInput(v?: string) {
+    if (!v) return "";
+    const d = dayjs(v, ["YYYY-MM-DD", "DD/MM/YYYY"], true);
+    return d.isValid() ? d.format("DD/MM/YYYY") : v;
+  }
+
+  function commit() {
+    const d = dayjs(buf, "DD/MM/YYYY", true);
+    onCommit(d.isValid() ? d.format("YYYY-MM-DD") : ""); // commit ISO
+  }
+
+  return (
+    <input
+      className="h-8 w-full border-0 bg-white px-2 text-xs"
+      value={buf}
+      onChange={(e) => setBuf(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => { if (e.key === "Enter") { e.currentTarget.blur(); } }}
+      placeholder={placeholder}
+      inputMode="numeric"
+    />
+  );
+}
+2) Use it in bulk/single forms
+tsx
+Copy
+Edit
+// in npt-form-multi.tsx row render:
+<DateCellInput
+  value={row.date}
+  onCommit={(iso) => setRows(prev => {
+    const copy = [...prev];
+    copy[i] = { ...copy[i], date: iso };
+    return copy;
+  })}
+/>
+If you auto-derive year/month from date, do it onCommit, not on each keystroke.
+
+B) Fix hours input (snap on blur, not on change)
+Root cause: snapping/clamping during onChange interrupts typing (and some browsers reject decimal with type="number" + locale).
+Fix: same buffering pattern; snap to nearest 0.25 onBlur only; clamp [0..24].
+
+client/src/components/npt/QuarterHoursInput.tsx
+
+tsx
+Copy
+Edit
+import { useEffect, useRef, useState } from "react";
+
+type Props = { value?: number; onCommit: (v: number) => void; placeholder?: string; };
+
+export default function QuarterHoursInput({ value, onCommit, placeholder = "0.00" }: Props) {
+  const [buf, setBuf] = useState<string>(value?.toString() ?? "");
+  const last = useRef(value);
+  useEffect(() => {
+    if (value !== last.current) { setBuf(value?.toString() ?? ""); last.current = value; }
+  }, [value]);
+
+  function commit() {
+    const n = Number(buf.replace(",", "."));
+    if (Number.isFinite(n)) {
+      const clamped = Math.min(24, Math.max(0, n));
+      const snapped = Math.round(clamped / 0.25) * 0.25;
+      onCommit(Number(snapped.toFixed(2)));
+    } else {
+      onCommit(0);
+    }
+  }
+
+  return (
+    <input
+      className="h-8 w-full border-0 bg-white px-2 text-xs"
+      value={buf}
+      onChange={(e)=> setBuf(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e)=>{ if (e.key === "Enter") e.currentTarget.blur(); }}
+      inputMode="decimal"
+      placeholder={placeholder}
+    />
+  );
+}
+Use it:
+
+tsx
+Copy
+Edit
+<QuarterHoursInput
+  value={row.hours}
+  onCommit={(v) => setRows(prev => {
+    const copy = [...prev];
+    copy[i] = { ...copy[i], hours: v };
+    return copy;
+  })}
+/>
+C) NPT type change should NOT reset unrelated fields
+Root cause: your cleanupByType probably re-creates rows or clears extra fields (or you pass a new default row).
+Fix: ensure it only clears disabled fields and never touches date, hours, system, n2Number, etc.
+
+ts
+Copy
+Edit
+// shared/nptRules.ts
+export function cleanupByType<T extends Record<string, any>>(row: T): T {
+  const e = enabledFields(row.nptType);
+  const out = { ...row };
+
+  if (!e.contractualProcess) out.contractualProcess = "";
+
+  if (!e.department) out.department = ""; // ONLY if your rule says so
+
+  if (!e.equipment) {
+    out.equipment = "";
+    out.thePart = ""; out.failureDesc = ""; out.rootCause = "";
+    out.corrective = ""; out.futureAction = ""; out.actionParty = "";
+  }
+  return out; // keep date, hours, system, n2Number AS IS
+}
+On NPT type select:
+
+tsx
+Copy
+Edit
+onValueChange={(val) => setRows(prev => {
+  const copy = [...prev];
+  const next = cleanupByType({ ...copy[i], nptType: val }); // only clears locked group
+  copy[i] = next;
+  return copy;
+})}
+Also ensure keys are stable (don’t use key={value} on cells). Use key={row.id + ':' + field} so re-renders don’t remount inputs.
+
+D) “Save as Draft” must bypass validation
+Front-end: call the API with a mode/header and skip Zod except minimal shape.
+
+ts
+Copy
+Edit
+async function onSaveDraft() {
+  await api.post("/api/npt-reports/bulk?mode=draft", { rows });  // no FE validation
+  toast.success("Draft saved");
+}
+Server: build schema by mode.
+
+ts
+Copy
+Edit
+// server/schemas/npt.ts
+import { z } from "zod";
+export function buildNptSchema(mode: "draft" | "review") {
+  const base = z.object({
+    rigNumber: z.union([z.string(), z.number()]).optional(),
+    year: z.number().optional(),
+    month: z.union([z.string(), z.number()]).optional(),
+    date: z.string().optional(),
+    hours: z.number().optional(),
+    nptType: z.string().optional(),
+    system: z.string().optional(),
+    equipment: z.string().optional(),
+    thePart: z.string().optional(),
+    contractualProcess: z.string().optional(),
+    department: z.string().optional(),
+    failureDesc: z.string().optional(),
+    rootCause: z.string().optional(),
+    corrective: z.string().optional(),
+    futureAction: z.string().optional(),
+    actionParty: z.string().optional(),
+    n2Number: z.string().optional(),
+    investigationFileId: z.string().optional(),
+    investigationAiText: z.string().optional(),
+    wellName: z.string().optional(),
+  });
+
+  if (mode === "draft") {
+    // accept anything; just coerce/snap hours if present
+    return base.transform((v) => {
+      if (typeof v.hours === "number") {
+        const clamped = Math.min(24, Math.max(0, v.hours));
+        v.hours = Math.round(clamped / 0.25) * 0.25;
+      }
+      return v;
+    });
+  }
+
+  // strict review schema: import your full schema + superRefine business rules
+  return strictReviewSchema;
+}
+
+// route
+const mode = (req.query.mode === "draft") ? "draft" : "review";
+const schema = buildNptSchema(mode);
+const parsed = schema.safeParse(req.bodyRowOrRows);
+if (!parsed.success) return res.status(400).json({ errors: parsed.error.flatten().fieldErrors });
+const data = parsed.data;
+// persist with status = mode === "draft" ? "Draft" : "Pending Review"
+E) Quick QA checklist (2 minutes)
+Type 01/05/2025 → the text stays while typing; on blur it becomes ISO in state (e.g., 2025-05-01).
+
+Change Hours → it accepts the text; on blur it snaps to nearest 0.25 (0–24).
+
+Toggle NPT Type → only the locked group clears; date/hours/system stay.
+
+Save as Draft → succeeds even if fields are empty.
+
+Submit for Review → validates as before (N2 windows, investigation ≥6h, Contractual vs Abraj groups).
+
