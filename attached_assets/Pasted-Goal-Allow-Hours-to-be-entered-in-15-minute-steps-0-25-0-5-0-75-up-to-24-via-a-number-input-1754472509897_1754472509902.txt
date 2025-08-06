@@ -1,0 +1,211 @@
+Goal
+Allow Hours to be entered in 15-minute steps (0.25, 0.5, 0.75, … up to 24) via:
+
+a number input (snaps to nearest 0.25 on blur), and
+
+a dropdown listing all quarter hours.
+Both controls update the same value.
+
+Acceptance criteria
+
+UI only allows 0–24 in 0.25 steps.
+
+Manual typing snaps to the nearest 0.25 on blur.
+
+API and DB reject non-quarter values.
+
+1) Add shared time utilities
+File: src/lib/time.ts
+Action: Create this file and paste:
+
+ts
+Copy code
+export const clamp = (v: number, min = 0, max = 24) => Math.max(min, Math.min(max, v));
+export const snapQuarter = (v: number) => Math.round(v * 4) / 4;
+export const quarters = (min = 0, max = 24) => {
+  const arr: number[] = [];
+  for (let q = min * 4; q <= max * 4; q++) arr.push(q / 4);
+  return arr; // 0, 0.25, ... 24
+};
+export const isQuarter = (v: number) =>
+  Number.isFinite(v) && v >= 0 && v <= 24 && Math.round(v * 4) === v * 4;
+2) Create a combined field (Number + Dropdown)
+File: src/components/QuarterHourField.tsx
+Action: Create and paste:
+
+tsx
+Copy code
+import React, { useMemo } from "react";
+import { clamp, snapQuarter, quarters } from "@/lib/time";
+
+type Props = {
+  value: number | undefined;
+  onChange: (v: number | undefined) => void;
+  id?: string;
+  name?: string;
+  min?: number;
+  max?: number;
+  disabled?: boolean;
+  label?: string;
+};
+
+export default function QuarterHourField({
+  value,
+  onChange,
+  id = "hours",
+  name = "hours",
+  min = 0,
+  max = 24,
+  disabled,
+  label = "Hours"
+}: Props) {
+
+  const opts = useMemo(() => quarters(min, max), [min, max]);
+
+  const onNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value === "" ? NaN : Number(e.target.value);
+    if (Number.isNaN(raw)) return onChange(undefined);
+    onChange(clamp(raw, min, max));
+  };
+
+  const onNumberBlur = () => {
+    if (typeof value === "number") onChange(snapQuarter(clamp(value, min, max)));
+  };
+
+  const onSelectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const v = Number(e.target.value);
+    onChange(clamp(v, min, max));
+  };
+
+  const display = (v: number | undefined) =>
+    v === undefined ? "" : (Math.round(v * 100) / 100).toString().replace(/\.00$/, "");
+
+  return (
+    <div className="flex flex-col gap-2">
+      <label className="font-medium" htmlFor={id}>{label}</label>
+
+      <div className="flex items-center gap-3">
+        {/* Number input with step 0.25 + snap on blur */}
+        <div className="flex flex-col">
+          <input
+            id={id}
+            name={name}
+            type="number"
+            min={min}
+            max={max}
+            step={0.25}
+            inputMode="decimal"
+            value={display(value)}
+            onChange={onNumberChange}
+            onBlur={onNumberBlur}
+            placeholder="0.25"
+            disabled={disabled}
+            className="w-32"
+          />
+          <small className="text-gray-500">Type (snaps to 0.25)</small>
+        </div>
+
+        {/* Dropdown with every quarter hour */}
+        <div className="flex flex-col">
+          <select
+            value={value === undefined ? "" : value}
+            onChange={onSelectChange}
+            disabled={disabled}
+            className="w-40"
+            aria-label="Quarter-hour picker"
+          >
+            <option value="" disabled>Select…</option>
+            {opts.map(v => (
+              <option key={v} value={v}>
+                {v % 1 === 0 ? `${v}.00` : v}
+              </option>
+            ))}
+          </select>
+          <small className="text-gray-500">Pick (0–24 by 0.25)</small>
+        </div>
+      </div>
+
+      <small className="text-gray-400">Accepted range: 0–24 in 0.25 steps.</small>
+    </div>
+  );
+}
+3) Wire it into Create NPT Report
+Go to: the page that renders your Create NPT Report form, e.g.
+src/pages/npt/CreateNptReport.tsx (or src/features/npt/CreateNptReport.tsx / src/modules/npt/CreateForm.tsx)
+
+Import the component
+
+tsx
+Copy code
+import QuarterHourField from "@/components/QuarterHourField";
+Add/ensure state
+
+tsx
+Copy code
+const [form, setForm] = useState({
+  // other fields...
+  hours: undefined as number | undefined,
+});
+Replace the existing Hours input with:
+
+tsx
+Copy code
+<QuarterHourField
+  label="Hours"
+  value={form.hours}
+  onChange={(v) => setForm(f => ({ ...f, hours: v }))}
+/>
+4) Frontend validation (Zod example)
+File: your form schema, e.g. src/schemas/npt.ts
+
+ts
+Copy code
+import { z } from "zod";
+import { isQuarter } from "@/lib/time";
+
+export const nptEntrySchema = z.object({
+  // ...
+  hours: z.number().refine(isQuarter, "Hours must be a multiple of 0.25 between 0 and 24"),
+});
+(Yup equivalent: ensure value * 4 is an integer and range is 0–24.)
+
+5) API and DB guards
+Express route (server)
+
+ts
+Copy code
+const isQuarter = (v: any) => {
+  const n = Number(v);
+  return Number.isFinite(n) && n >= 0 && n <= 24 && Math.round(n * 4) === n * 4;
+};
+
+app.post("/api/npt", (req, res, next) => {
+  const { hours } = req.body;
+  if (!isQuarter(hours)) {
+    return res.status(400).json({ error: "Invalid hours: must be 0–24 in 0.25 steps" });
+  }
+  next();
+});
+PostgreSQL constraint
+
+sql
+Copy code
+ALTER TABLE npt_entries
+ADD CONSTRAINT chk_hours_quarter
+CHECK (hours >= 0 AND hours <= 24 AND (hours * 4)::int = hours * 4);
+SQL Server alternative
+
+sql
+Copy code
+ALTER TABLE npt_entries
+ADD CONSTRAINT chk_hours_quarter
+CHECK (hours >= 0 AND hours <= 24 AND ROUND(hours*4,0) = hours*4);
+6) How to test
+Type 0.2 → on blur it becomes 0.25.
+
+Choose 1.75 from the dropdown → number input shows 1.75.
+
+Type 25 → it clamps to 24.00 then snaps to a quarter.
+
+Submit with 0.3 via API client → API returns 400; DB also rejects.
+

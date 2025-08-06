@@ -28,6 +28,17 @@ The platform serves different user roles (drilling managers, supervisors, and ad
 - **Comprehensive Storage Layer**: Extended IStorage interface with complete CRUD operations for delivery and alert management
 
 ### Latest Enhancement (January 6, 2025)
+- **QuarterHourField Implementation**: Enhanced NPT reporting with precise 15-minute time entry:
+  - Created QuarterHourField component for precise hour entry with quarter-hour validation (0.25 steps)
+  - Implemented time utility functions (clamp, snapQuarter, quarters, isQuarter) for consistent validation
+  - Enhanced NPT form with automatic quarter-hour snapping on blur
+  - Added backend API validation to reject non-quarter-hour values
+  - Created comprehensive time demo page showing both compact and full selector components
+  - Updated form validation schema to enforce quarter-hour compliance using Zod refinement
+  - Range validation: 0-24 hours with automatic clamping
+  - User-friendly interface: type any value, automatically snaps to nearest 0.25
+
+### Previous Enhancement (January 6, 2025)
 - **Custom Email/Password Authentication**: Complete replacement of Replit Auth with custom login system:
   - Custom login page with email/ID and password form fields
   - Password field added to users table with database migration

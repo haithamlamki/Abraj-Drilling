@@ -19,17 +19,19 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Info } from "lucide-react";
 import type { System, Equipment, Department, ActionParty, InsertNptReport, Rig } from "@shared/schema";
 import type { BillingSheetRow } from "@shared/billingTypes";
+import QuarterHourField from "@/components/QuarterHourField";
+import { isQuarter } from "@/lib/time";
 
-// Schema for drafts - minimal validation
+// Schema for drafts - minimal validation with quarter-hour validation
 const draftFormSchema = insertNptReportSchema.extend({
   date: z.string().min(1, "Date is required"),
-  hours: z.number().min(0.1, "Hours must be greater than 0").max(24, "Hours cannot exceed 24"),
+  hours: z.number().refine(isQuarter, "Hours must be a multiple of 0.25 between 0 and 24"),
 });
 
-// Schema for submission - full validation
+// Schema for submission - full validation with quarter-hour validation
 const formSchema = insertNptReportSchema.extend({
   date: z.string().min(1, "Date is required"),
-  hours: z.number().min(0.1, "Hours must be greater than 0").max(24, "Hours cannot exceed 24"),
+  hours: z.number().refine(isQuarter, "Hours must be a multiple of 0.25 between 0 and 24"),
 }).refine((data) => {
   // Conditional validation based on NPT type
   if (data.nptType === 'Contractual') {
@@ -85,8 +87,8 @@ export default function NptForm() {
     }
   }, []);
 
-  // Initialize form with billing data or existing report data
-  const getDefaultValues = () => {
+  // Get default form values based on context
+  const getDefaultValues = (): FormData => {
     // If editing an existing report, use its data
     if (existingReport) {
       return {
@@ -461,13 +463,24 @@ export default function NptForm() {
                         <FormControl>
                           <Input 
                             type="number" 
-                            step="0.1" 
+                            step="0.25" 
                             min="0" 
                             max="24"
-                            {...field}
-                            onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                            value={field.value || ""}
+                            onChange={(e) => {
+                              const value = parseFloat(e.target.value);
+                              field.onChange(isNaN(value) ? 0 : value);
+                            }}
+                            onBlur={(e) => {
+                              const value = parseFloat(e.target.value) || 0;
+                              // Snap to quarter hour
+                              const snapped = Math.round(value * 4) / 4;
+                              const clamped = Math.max(0, Math.min(24, snapped));
+                              field.onChange(clamped);
+                            }}
                             className="h-8 text-xs border-0 rounded-none text-center"
-                            data-testid="input-hours"
+                            placeholder="0.25"
+                            data-testid="input-hours-quarter"
                           />
                         </FormControl>
                       )}

@@ -2,6 +2,12 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
+
+// Helper function to validate quarter-hour values
+const isQuarter = (v: any) => {
+  const n = Number(v);
+  return Number.isFinite(n) && n >= 0 && n <= 24 && Math.round(n * 4) === n * 4;
+};
 import { BillingProcessor } from "./billingProcessor";
 import { processPDFBilling, enhanceBillingRowWithNPTData } from "./pdfProcessor";
 import { workflowService } from "./workflowService";
@@ -360,6 +366,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "User must be assigned to a rig" });
       }
       
+      // Validate quarter-hour values for hours field
+      if (req.body.hours !== undefined && !isQuarter(req.body.hours)) {
+        return res.status(400).json({ 
+          message: "Invalid hours: must be 0–24 in 0.25 steps",
+          error: "INVALID_QUARTER_HOUR" 
+        });
+      }
+
       const validatedData = insertNptReportSchema.parse({
         ...req.body,
         userId,
@@ -401,6 +415,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (['Approved', 'Rejected'].includes(existingReport.status!) && user?.role !== 'admin') {
         return res.status(403).json({ message: "Cannot modify approved/rejected reports" });
+      }
+      
+      // Validate quarter-hour values for hours field if provided
+      if (req.body.hours !== undefined && !isQuarter(req.body.hours)) {
+        return res.status(400).json({ 
+          message: "Invalid hours: must be 0–24 in 0.25 steps",
+          error: "INVALID_QUARTER_HOUR" 
+        });
       }
       
       const validatedData = insertNptReportSchema.partial().parse(req.body);

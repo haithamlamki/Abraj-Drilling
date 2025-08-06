@@ -17,6 +17,7 @@ import Settings from "@/pages/settings";
 import Reports from "@/pages/reports";
 import MonthlyReports from "@/pages/monthly-reports";
 import MonthlyTimeline from "@/pages/monthly-timeline";
+import TimeDemo from "@/pages/time-demo";
 import NotFound from "@/pages/not-found";
 import { useEffect } from "react";
 
@@ -43,6 +44,7 @@ function Router() {
           <Route path="/monthly-reports" component={MonthlyReports} />
           <Route path="/monthly-reports/:id/timeline" component={MonthlyTimeline} />
           <Route path="/settings" component={Settings} />
+          <Route path="/time-demo" component={TimeDemo} />
         </>
       )}
       <Route component={NotFound} />
