@@ -1,0 +1,260 @@
+A) Field editability by NPT Type
+If Contractual:
+
+Editable: System, Contractual Process
+
+Disabled: all equipment/failure/cause group fields:
+Equipment, The Part, Failure Desc, Root Cause,
+Corrective, Future Action, Action Party
+
+If Abraj:
+
+Editable: the full equipment/failure/cause group (above)
+
+Disabled: Contractual Process
+
+System is editable in both types.
+
+B) Notification Number (N2) — required only if:
+Drilling & Project: 3.75 ≤ Hours ≤ 5.75
+
+Maintenance (M/E): 2.0 ≤ Hours ≤ 5.75
+
+C) Failure Investigation Report — required if:
+Hours ≥ 6.0 (any department)
+Accept either file upload or AI-generated text.
+
+Hours are in 0.25 increments—bounds above are inclusive.
+
+1) Shared rules (use on FE & BE)
+shared/nptRules.ts
+
+ts
+Copy code
+export const NPT_TYPES = { CONTRACTUAL: "Contractual", ABRAJ: "Abraj" } as const;
+export const DEPARTMENTS = {
+  DRILLING_PROJECT: "Drilling & Project",
+  MAINTENANCE_ME: "Maintenance (M/E)",
+} as const;
+
+export type NptType = typeof NPT_TYPES[keyof typeof NPT_TYPES];
+
+export const isContractual = (t?: string) => t === NPT_TYPES.CONTRACTUAL;
+export const isAbraj       = (t?: string) => t === NPT_TYPES.ABRAJ;
+
+export function needsN2(dept?: string, hrs?: number) {
+  if (hrs == null) return false;
+  if (dept === DEPARTMENTS.DRILLING_PROJECT) return hrs >= 3.75 && hrs <= 5.75;
+  if (dept === DEPARTMENTS.MAINTENANCE_ME)   return hrs >= 2.0  && hrs <= 5.75;
+  return false;
+}
+
+export const needsInvestigationReport = (hrs?: number) => (hrs ?? 0) >= 6.0;
+2) UI logic (lock/unlock fields immediately)
+Example in React (single row form or per-row in bulk grid):
+
+tsx
+Copy code
+import { isContractual, isAbraj, needsN2, needsInvestigationReport } from "@/shared/nptRules";
+
+const [form, setForm] = useState({
+  nptType: "", system: "", contractualProcess: "",
+  equipment: "", thePart: "", failureDesc: "", rootCause: "",
+  corrective: "", futureAction: "", actionParty: "",
+  n2Number: "", department: "", hours: 0,
+  investigationFileId: "", investigationAiText: "",
+});
+
+// When NPT type changes, lock & wipe disabled fields
+useEffect(() => {
+  setForm(f => {
+    if (isContractual(f.nptType)) {
+      return {
+        ...f,
+        // keep system & contractualProcess as is
+        equipment: "", thePart: "", failureDesc: "", rootCause: "",
+        corrective: "", futureAction: "", actionParty: "",
+        // N2 & investigation fields become irrelevant unless other rules trigger later
+      };
+    }
+    if (isAbraj(f.nptType)) {
+      return { ...f, contractualProcess: "" }; // locked for Abraj
+    }
+    return f;
+  });
+}, [form.nptType]);
+
+const disabledContractualProcess = isAbraj(form.nptType);
+const disabledEquipFailure = isContractual(form.nptType);
+
+// Example inputs
+<input disabled={false} value={form.system} onChange={e=>setForm(f=>({...f, system: e.target.value}))} />
+<input disabled={disabledContractualProcess} value={form.contractualProcess} onChange={e=>setForm(f=>({...f, contractualProcess: e.target.value}))} />
+<input disabled={disabledEquipFailure} value={form.equipment} onChange={e=>setForm(f=>({...f, equipment: e.target.value}))} />
+{/* repeat disabledEquipFailure for thePart, failureDesc, rootCause, corrective, futureAction, actionParty */}
+Inline helpers/labels
+
+If Contractual: show hint under group “Equipment/Failure/Cause fields are locked for Contractual.”
+
+If Abraj: show hint under Contractual Process: “Locked for Abraj.”
+
+3) Frontend validation (Zod)
+client/src/validation/nptEntry.ts
+
+ts
+Copy code
+import { z } from "zod";
+import { isContractual, isAbraj, needsN2, needsInvestigationReport } from "@/shared/nptRules";
+
+export const nptEntrySchema = z.object({
+  nptType: z.string().min(1),
+  system: z.string().min(1),
+  hours: z.number().min(0).max(24),
+  department: z.string().min(1),
+
+  contractualProcess: z.string().optional(),
+  equipment: z.string().optional(),
+  thePart: z.string().optional(),
+  failureDesc: z.string().optional(),
+  rootCause: z.string().optional(),
+  corrective: z.string().optional(),
+  futureAction: z.string().optional(),
+  actionParty: z.string().optional(),
+
+  n2Number: z.string().optional(), // allow string/int typed as string
+  investigationFileId: z.string().optional(),
+  investigationAiText: z.string().optional(),
+})
+.superRefine((v, ctx) => {
+  // Required by NPT type
+  if (isContractual(v.nptType)) {
+    if (!v.contractualProcess?.trim()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["contractualProcess"], message: "Contractual Process is required for Contractual." });
+    }
+  }
+  if (isAbraj(v.nptType)) {
+    const req = ["equipment","thePart","failureDesc","rootCause","corrective","futureAction","actionParty"] as const;
+    for (const k of req) {
+      if (!v[k]?.toString().trim()) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: [k], message: "Required for Abraj." });
+      }
+    }
+  }
+
+  // N2 conditional requirement
+  if (needsN2(v.department, v.hours)) {
+    if (!v.n2Number?.toString().trim()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["n2Number"], message: "N2 is required for this hours range." });
+    }
+  }
+
+  // Investigation report when ≥ 6.0h (file or AI text)
+  if (needsInvestigationReport(v.hours)) {
+    const hasFile = !!v.investigationFileId?.trim();
+    const hasAi   = !!v.investigationAiText?.trim();
+    if (!hasFile && !hasAi) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["investigationFileId"], message: "Investigation report (file or AI) is required for ≥ 6.0h." });
+    }
+  }
+});
+On Submit for Review, block submission if schema fails.
+On Save as Draft, you can skip the conditional checks if desired.
+
+4) Backend validation + normalization (Zod)
+server/schemas/npt.ts
+
+ts
+Copy code
+import { z } from "zod";
+import { isContractual, isAbraj, needsN2, needsInvestigationReport } from "../../shared/nptRules";
+
+export const serverNptSchema = z.object({
+  nptType: z.string(),
+  system: z.string(),
+  hours: z.number(),
+  department: z.string(),
+
+  contractualProcess: z.string().optional(),
+  equipment: z.string().optional(),
+  thePart: z.string().optional(),
+  failureDesc: z.string().optional(),
+  rootCause: z.string().optional(),
+  corrective: z.string().optional(),
+  futureAction: z.string().optional(),
+  actionParty: z.string().optional(),
+
+  n2Number: z.string().optional(),
+  investigationFileId: z.string().optional(),
+  investigationAiText: z.string().optional(),
+})
+// Normalize disabled fields server-side to keep DB clean
+.transform(v => {
+  if (isContractual(v.nptType)) {
+    return {
+      ...v,
+      // keep system + contractualProcess; wipe the locked group:
+      equipment: "", thePart: "", failureDesc: "", rootCause: "",
+      corrective: "", futureAction: "", actionParty: "",
+    };
+  }
+  if (isAbraj(v.nptType)) {
+    return { ...v, contractualProcess: "" };
+  }
+  return v;
+})
+.superRefine((v, ctx) => {
+  // Same enforcement as front-end
+  if (isContractual(v.nptType) && !v.contractualProcess?.trim())
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["contractualProcess"], message: "Contractual Process is required for Contractual." });
+
+  if (isAbraj(v.nptType)) {
+    const req = ["equipment","thePart","failureDesc","rootCause","corrective","futureAction","actionParty"] as const;
+    for (const k of req) if (!v[k]?.toString().trim())
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: [k], message: "Required for Abraj." });
+  }
+
+  if (needsN2(v.department, v.hours) && !v.n2Number?.toString().trim())
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["n2Number"], message: "N2 is required for this hours range." });
+
+  if (needsInvestigationReport(v.hours)) {
+    const hasFile = !!v.investigationFileId?.trim();
+    const hasAi   = !!v.investigationAiText?.trim();
+    if (!hasFile && !hasAi)
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["investigationFileId"], message: "Investigation report (file or AI) is required for ≥ 6.0h." });
+  }
+});
+In your route handler:
+
+ts
+Copy code
+const parsed = serverNptSchema.safeParse(req.body);
+if (!parsed.success) {
+  return res.status(400).json({ errors: parsed.error.flatten().fieldErrors });
+}
+const data = parsed.data; // normalized & validated
+// continue to persist...
+5) Quick test cases
+Contractual
+
+System editable, Contractual Process required.
+
+Equipment/Failure/Cause fields disabled and wiped from payload.
+
+Abraj
+
+Equipment/Failure/Cause fields required; Contractual Process disabled & wiped.
+
+N2 required
+
+Dept = Drilling & Project, Hours = 3.75 → N2 must be filled.
+
+Dept = **Maintenance (M/E), Hours = 2.0` → N2 must be filled.
+
+Hours = 5.75 in those depts → still required.
+
+Outside ranges → not required.
+
+Investigation
+
+Hours 6.0 or more → require either file id or AI text.
+

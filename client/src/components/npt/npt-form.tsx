@@ -7,6 +7,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { insertNptReportSchema } from "@shared/schema";
+import { nptEntrySchema } from "@/validation/nptEntry";
+import { isContractual, isAbraj, needsN2, needsInvestigationReport, getDisabledFieldsHelp, getN2RequirementHelp, getInvestigationRequirementHelp, DEPARTMENTS } from "@shared/nptRules";
 import { z } from "zod";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,42 +18,95 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Info } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Info, AlertTriangle, Upload } from "lucide-react";
 import type { System, Equipment, Department, ActionParty, InsertNptReport, Rig } from "@shared/schema";
 import type { BillingSheetRow } from "@shared/billingTypes";
 import QuarterHourField from "@/components/QuarterHourField";
 import { isQuarter } from "@/lib/time";
 import { NPT_STATUS } from "@shared/status";
 
-// Schema for drafts - minimal validation with quarter-hour validation
-const draftFormSchema = insertNptReportSchema.extend({
+// Create a form schema based on insertNptReportSchema with additional validation
+const formSchema = z.object({
+  rigId: z.number().nullable().optional(),
+  userId: z.string().optional(),
   date: z.string().min(1, "Date is required"),
-  hours: z.number().refine(isQuarter, "Hours must be a multiple of 0.25 between 0 and 24"),
-});
-
-// Schema for submission - full validation with quarter-hour validation
-const formSchema = insertNptReportSchema.extend({
-  date: z.string().min(1, "Date is required"),
-  hours: z.number().refine(isQuarter, "Hours must be a multiple of 0.25 between 0 and 24"),
-}).refine((data) => {
-  // Conditional validation based on NPT type
-  if (data.nptType === 'Contractual') {
-    return !!data.contractualProcess && data.contractualProcess.trim().length > 0;
-  } else if (data.nptType === 'Abraj') {
-    return !!data.system && 
-           !!data.parentEquipment && 
-           !!data.partEquipment && data.partEquipment.trim().length > 0 &&
-           !!data.department &&
-           !!data.immediateCause && data.immediateCause.trim().length > 0 &&
-           !!data.rootCause && data.rootCause.trim().length > 0 &&
-           !!data.correctiveAction && data.correctiveAction.trim().length > 0 &&
-           !!data.futureAction && data.futureAction.trim().length > 0 &&
-           !!data.actionParty;
+  hours: z.number().min(0).max(24).refine(isQuarter, "Hours must be in 0.25 increments"),
+  nptType: z.string().min(1, "NPT Type is required"),
+  system: z.string().min(1, "System is required"),
+  parentEquipment: z.string().optional(),
+  partEquipment: z.string().optional(),
+  contractualProcess: z.string().optional(),
+  department: z.string().min(1, "Department is required"),
+  immediateCause: z.string().optional(),
+  rootCause: z.string().optional(),
+  correctiveAction: z.string().optional(),
+  futureAction: z.string().optional(),
+  actionParty: z.string().optional(),
+  notificationNumber: z.string().optional(),
+  investigationReport: z.string().optional(),
+  n2Number: z.string().optional(),
+  investigationFileId: z.string().optional(),
+  investigationAiText: z.string().optional(),
+  wellName: z.string().optional(),
+  status: z.string().optional(),
+}).superRefine((data, ctx) => {
+  // Apply NPT type-based validation rules
+  if (isContractual(data.nptType)) {
+    if (!data.contractualProcess?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["contractualProcess"],
+        message: "Contractual Process is required for Contractual NPT type."
+      });
+    }
   }
-  return true;
-}, {
-  message: "Please fill in all required fields based on NPT type",
-  path: ["nptType"]
+
+  if (isAbraj(data.nptType)) {
+    const requiredFields = [
+      { field: "parentEquipment", label: "Parent Equipment" },
+      { field: "partEquipment", label: "Part Equipment" },
+      { field: "immediateCause", label: "Immediate Cause" },
+      { field: "rootCause", label: "Root Cause" },
+      { field: "correctiveAction", label: "Corrective Action" },
+      { field: "futureAction", label: "Future Action" },
+      { field: "actionParty", label: "Action Party" },
+    ] as const;
+
+    for (const { field, label } of requiredFields) {
+      if (!data[field]?.toString().trim()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [field],
+          message: `${label} is required for Abraj NPT type.`
+        });
+      }
+    }
+  }
+
+  // N2 conditional requirement
+  if (needsN2(data.department, data.hours)) {
+    if (!data.n2Number?.toString().trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["n2Number"],
+        message: "N2 Number is required for this hours range and department."
+      });
+    }
+  }
+
+  // Investigation report when ≥ 6.0h
+  if (needsInvestigationReport(data.hours)) {
+    const hasFile = !!data.investigationFileId?.trim();
+    const hasAi = !!data.investigationAiText?.trim();
+    if (!hasFile && !hasAi) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["investigationFileId"],
+        message: "Investigation report (file upload or AI-generated text) is required for ≥ 6.0 hours."
+      });
+    }
+  }
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -61,6 +116,8 @@ export default function NptForm() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [selectedNptType, setSelectedNptType] = useState<string>("");
+  const [selectedDepartment, setSelectedDepartment] = useState<string>("");
+  const [selectedHours, setSelectedHours] = useState<number>(0);
   const [billingData, setBillingData] = useState<BillingSheetRow | null>(null);
   
   // Get edit parameter from URL
@@ -110,6 +167,9 @@ export default function NptForm() {
         actionParty: existingReport.actionParty || "",
         notificationNumber: existingReport.notificationNumber || "",
         investigationReport: existingReport.investigationReport || "",
+        n2Number: existingReport.n2Number || "",
+        investigationFileId: existingReport.investigationFileId || "",
+        investigationAiText: existingReport.investigationAiText || "",
         wellName: existingReport.wellName || "",
         status: existingReport.status || "Draft",
       };
@@ -134,6 +194,9 @@ export default function NptForm() {
       actionParty: "",
       notificationNumber: "",
       investigationReport: "",
+      n2Number: "",
+      investigationFileId: "",
+      investigationAiText: "",
       wellName: "",
       status: "Draft",
     };
@@ -213,14 +276,14 @@ export default function NptForm() {
     mutationFn: async (data: FormData & { status?: string }) => {
       if (editId) {
         // Update existing report
-        await apiRequest('PUT', `/api/npt-reports/${editId}`, {
+        return await apiRequest(`/api/npt-reports/${editId}`, 'PUT', {
           ...data,
           date: new Date(data.date).toISOString(),
           status: data.status || "Draft",
         });
       } else {
         // Create new report
-        await apiRequest('POST', '/api/npt-reports', {
+        return await apiRequest('/api/npt-reports', 'POST', {
           ...data,
           date: new Date(data.date).toISOString(),
           status: data.status || "Draft",
@@ -299,14 +362,14 @@ export default function NptForm() {
     mutationFn: async (data: FormData) => {
       if (editId) {
         // Update existing report
-        await apiRequest('PUT', `/api/npt-reports/${editId}`, {
+        return await apiRequest(`/api/npt-reports/${editId}`, 'PUT', {
           ...data,
           date: new Date(data.date).toISOString(),
           status: NPT_STATUS.PENDING_REVIEW,
         });
       } else {
         // Create new report
-        await apiRequest('POST', '/api/npt-reports', {
+        return await apiRequest('/api/npt-reports', 'POST', {
           ...data,
           date: new Date(data.date).toISOString(),
           status: NPT_STATUS.PENDING_REVIEW,
@@ -376,11 +439,42 @@ export default function NptForm() {
     },
   });
 
-  // Watch for NPT type changes
+  // Watch for NPT type, department, and hours changes
   const watchedNptType = form.watch("nptType");
+  const watchedDepartment = form.watch("department");
+  const watchedHours = form.watch("hours");
+  
   useEffect(() => {
     setSelectedNptType(watchedNptType);
-  }, [watchedNptType]);
+    setSelectedDepartment(watchedDepartment);
+    setSelectedHours(watchedHours);
+    
+    // Clear disabled fields when NPT type changes
+    if (isContractual(watchedNptType)) {
+      // Clear equipment/failure/cause fields for Contractual
+      form.setValue("parentEquipment", "");
+      form.setValue("partEquipment", "");
+      form.setValue("immediateCause", "");
+      form.setValue("rootCause", "");
+      form.setValue("correctiveAction", "");
+      form.setValue("futureAction", "");
+      form.setValue("actionParty", "");
+    } else if (isAbraj(watchedNptType)) {
+      // Clear contractual process for Abraj
+      form.setValue("contractualProcess", "");
+    }
+  }, [watchedNptType, watchedDepartment, watchedHours]);
+
+  // Calculate field states
+  const isContractualType = isContractual(selectedNptType);
+  const isAbrajType = isAbraj(selectedNptType);
+  const showN2Field = needsN2(selectedDepartment, selectedHours);
+  const showInvestigationField = needsInvestigationReport(selectedHours);
+  
+  // Helper text for field states
+  const disabledFieldsHelp = getDisabledFieldsHelp(selectedNptType);
+  const n2RequirementHelp = getN2RequirementHelp(selectedDepartment, selectedHours);
+  const investigationRequirementHelp = getInvestigationRequirementHelp(selectedHours);
 
   const onSaveDraft = () => {
     // Get current form values without any validation
@@ -677,11 +771,11 @@ export default function NptForm() {
                         <Select 
                           onValueChange={field.onChange} 
                           value={field.value || ''} 
-                          disabled={selectedNptType !== 'Abraj'}
+                          disabled={false}
                           data-testid="select-department"
                         >
                           <FormControl>
-                            <SelectTrigger className={`h-8 text-xs border-0 rounded-none ${selectedNptType !== 'Abraj' ? 'bg-gray-100 opacity-50' : ''}`}>
+                            <SelectTrigger className="h-8 text-xs border-0 rounded-none">
                               <SelectValue placeholder="Select" />
                             </SelectTrigger>
                           </FormControl>
@@ -806,20 +900,27 @@ export default function NptForm() {
                     />
                   </div>
 
-                  {/* Q - Notification Number */}
+                  {/* Q - N2 Number */}
                   <div className="p-1 border-r border-gray-200">
                     <FormField
                       control={form.control}
-                      name="notificationNumber"
+                      name="n2Number"
                       render={({ field }) => (
                         <FormControl>
-                          <Input 
-                            placeholder="N2"
-                            {...field}
-                            value={field.value || ''}
-                            className="h-8 text-xs border-0 rounded-none text-center"
-                            data-testid="input-notification-number"
-                          />
+                          <div className="relative">
+                            <Input 
+                              placeholder={showN2Field ? "Required" : "N2"}
+                              {...field}
+                              value={field.value || ''}
+                              className={`h-8 text-xs border-0 rounded-none text-center ${showN2Field ? 'border-orange-300 bg-orange-50' : ''}`}
+                              data-testid="input-n2-number"
+                            />
+                            {showN2Field && (
+                              <Badge variant="destructive" className="absolute -top-1 -right-1 text-xs px-1 py-0">
+                                REQ
+                              </Badge>
+                            )}
+                          </div>
                         </FormControl>
                       )}
                     />
@@ -829,16 +930,23 @@ export default function NptForm() {
                   <div className="p-1 border-r border-gray-200">
                     <FormField
                       control={form.control}
-                      name="investigationReport"
+                      name="investigationFileId"
                       render={({ field }) => (
                         <FormControl>
-                          <Input 
-                            placeholder="Report"
-                            {...field}
-                            value={field.value || ''}
-                            className="h-8 text-xs border-0 rounded-none"
-                            data-testid="input-investigation-report"
-                          />
+                          <div className="relative">
+                            <Input 
+                              placeholder={showInvestigationField ? "Required" : "Report"}
+                              {...field}
+                              value={field.value || ''}
+                              className={`h-8 text-xs border-0 rounded-none ${showInvestigationField ? 'border-red-300 bg-red-50' : ''}`}
+                              data-testid="input-investigation-file"
+                            />
+                            {showInvestigationField && (
+                              <Badge variant="destructive" className="absolute -top-1 -right-1 text-xs px-1 py-0">
+                                REQ
+                              </Badge>
+                            )}
+                          </div>
                         </FormControl>
                       )}
                     />
@@ -865,6 +973,69 @@ export default function NptForm() {
                 </div>
               </div>
             </div>
+
+            {/* Field Editability Help */}
+            {disabledFieldsHelp && (
+              <Alert className="mt-4">
+                <Info className="h-4 w-4" />
+                <AlertDescription>
+                  <div className="font-medium mb-2">Field Editability Rules:</div>
+                  <div className="space-y-1">
+                    {disabledFieldsHelp.split('\n').map((line, index) => (
+                      <div key={index} className="text-sm">
+                        {line}
+                      </div>
+                    ))}
+                  </div>
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {/* Conditional Requirements Help */}
+            <div className="space-y-3 mt-4">
+              {/* N2 Number Requirement */}
+              {showN2Field && (
+                <Alert className="border-orange-200 bg-orange-50">
+                  <AlertTriangle className="h-4 w-4 text-orange-600" />
+                  <AlertDescription>
+                    <span className="font-medium text-orange-800">N2 Number Required:</span>
+                    <div className="text-orange-700 mt-1">
+                      {n2RequirementHelp}
+                    </div>
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {/* Investigation Report Requirement */}
+              {showInvestigationField && (
+                <Alert className="border-red-200 bg-red-50">
+                  <AlertTriangle className="h-4 w-4 text-red-600" />
+                  <AlertDescription>
+                    <span className="font-medium text-red-800">Investigation Report Required:</span>
+                    <div className="text-red-700 mt-1">
+                      {investigationRequirementHelp}
+                    </div>
+                  </AlertDescription>
+                </Alert>
+              )}
+            </div>
+
+            {/* Form Validation Errors */}
+            {Object.keys(form.formState.errors).length > 0 && (
+              <Alert variant="destructive" className="mt-4">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>
+                  <div className="font-medium mb-2">Please fix the following errors:</div>
+                  <div className="space-y-1">
+                    {Object.entries(form.formState.errors).map(([field, error]) => (
+                      <div key={field} className="text-sm">
+                        • {error.message}
+                      </div>
+                    ))}
+                  </div>
+                </AlertDescription>
+              </Alert>
+            )}
 
             {/* Form Actions */}
             <div className="flex justify-end space-x-4 pt-4 border-t border-gray-200">

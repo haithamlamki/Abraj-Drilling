@@ -83,6 +83,10 @@ export const nptReports = pgTable("npt_reports", {
   actionParty: varchar("action_party"),
   notificationNumber: varchar("notification_number"),
   investigationReport: varchar("investigation_report"),
+  // Enhanced fields for conditional requirements
+  n2Number: varchar("n2_number"),
+  investigationFileId: varchar("investigation_file_id"),
+  investigationAiText: text("investigation_ai_text"),
   wellName: varchar("well_name"),
   status: varchar("status").default('DRAFT'), // DRAFT, PENDING_REVIEW, APPROVED, REJECTED
   rejectionReason: text("rejection_reason"),
