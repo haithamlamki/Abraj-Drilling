@@ -1749,6 +1749,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const workflowRoutes = await import("./routes/workflows.js");
   app.use(workflowRoutes.default);
   
+  // Import and register approvals routes
+  const approvalsRoutes = await import("./routes/approvals.js");
+  app.use(approvalsRoutes.default);
+  
   // Seed workflow data endpoint (for admin testing)
   app.post('/api/admin/seed-workflows', isAuthenticated, async (req: any, res) => {
     try {
@@ -1784,6 +1788,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Error backfilling routing:', error);
       res.status(500).json({ error: 'Failed to backfill routing' });
+    }
+  });
+
+  // Seed approvals endpoint (for testing)
+  app.post('/api/admin/seed-approvals', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const currentUser = await storage.getUser(userId);
+      
+      if (currentUser?.role !== 'admin') {
+        return res.status(403).json({ message: "Only admins can seed data" });
+      }
+      
+      const { seedApprovals } = await import('./scripts/seedApprovals.js');
+      const result = await seedApprovals();
+      res.json({ success: true, ...result });
+    } catch (error) {
+      console.error('Error seeding approvals:', error);
+      res.status(500).json({ error: 'Failed to seed approval test data' });
     }
   });
 
