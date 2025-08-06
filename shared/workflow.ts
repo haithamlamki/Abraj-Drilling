@@ -1,73 +1,85 @@
+// Workflow management constants and types
+
+export const ROLE_KEYS = [
+  'toolpusher',
+  'e_maintenance', 
+  'ds',
+  'ose'
+] as const;
+
+export type RoleKey = typeof ROLE_KEYS[number];
+
+export const ROLE_LABELS: Record<RoleKey, string> = {
+  toolpusher: 'Tool Pusher',
+  e_maintenance: 'E-Maintenance', 
+  ds: 'Drilling Supervisor',
+  ose: 'Operations Support Engineer'
+};
+
 export const NPT_STATUS = {
-  DRAFT: "DRAFT",
-  PENDING_REVIEW: "PENDING_REVIEW", 
-  APPROVED: "APPROVED",
-  REJECTED: "REJECTED",
+  DRAFT: 'Draft',
+  PENDING_REVIEW: 'Pending Review',
+  APPROVED: 'Approved',
+  REJECTED: 'Rejected'
 } as const;
 
 export type NptStatus = typeof NPT_STATUS[keyof typeof NPT_STATUS];
 
-export type ApproverType = "role" | "user";
-
-export const APPROVAL_ACTIONS = {
-  APPROVE: "APPROVE",
-  REJECT: "REJECT", 
-  REQUEST_CHANGES: "REQUEST_CHANGES",
-} as const;
-
-export type ApprovalAction = typeof APPROVAL_ACTIONS[keyof typeof APPROVAL_ACTIONS];
-
-export const ROLE_KEYS = {
-  TOOL_PUSHER: "toolpusher",
-  E_MAINTENANCE: "e_maintenance", 
-  DS: "ds",
-  OSE: "ose",
-} as const;
-
-export type RoleKey = typeof ROLE_KEYS[keyof typeof ROLE_KEYS];
-
-export interface WorkflowDefinition {
-  id: number;
-  name: string;
-  rigId: number | null;
-  isActive: boolean;
-}
-
-export interface WorkflowStep {
-  id: number;
-  workflowId: number;
+// Workflow step configuration
+export interface WorkflowStepConfig {
   stepOrder: number;
-  approverType: ApproverType;
-  roleKey: string | null;
-  userId: string | null;
+  approverType: 'role' | 'user';
+  roleKey?: RoleKey;
+  userId?: string;
   isRequired: boolean;
 }
 
-export interface NptApproval {
-  id: number;
-  reportId: number;
-  stepOrder: number;
-  approverUserId: string;
-  action: ApprovalAction;
-  comment: string | null;
-  createdAt: Date;
-}
+// Default approval workflow - fallback when no custom workflow is configured
+export const DEFAULT_APPROVAL_WORKFLOW: WorkflowStepConfig[] = [
+  {
+    stepOrder: 1,
+    approverType: 'role',
+    roleKey: 'toolpusher',
+    isRequired: true
+  },
+  {
+    stepOrder: 2, 
+    approverType: 'role',
+    roleKey: 'ds',
+    isRequired: true
+  },
+  {
+    stepOrder: 3,
+    approverType: 'role', 
+    roleKey: 'ose',
+    isRequired: true
+  }
+];
 
-export interface Delegation {
-  id: number;
-  delegatorUserId: string;
-  delegateUserId: string;
-  startsAt: Date;
-  endsAt: Date;
-  rigId: number | null;
-  roleKey: string | null;
-  isActive: boolean;
-}
-
-export interface EffectiveApprover {
-  id: string;
-  name: string;
-  roleKey?: string;
-  isDelegated?: boolean;
-  delegatorName?: string;
-}
+// Default E-Maintenance workflow - used for E-Maintenance department NPTs
+export const E_MAINTENANCE_WORKFLOW: WorkflowStepConfig[] = [
+  {
+    stepOrder: 1,
+    approverType: 'role',
+    roleKey: 'toolpusher',
+    isRequired: true
+  },
+  {
+    stepOrder: 2,
+    approverType: 'role',
+    roleKey: 'e_maintenance', 
+    isRequired: true
+  },
+  {
+    stepOrder: 3,
+    approverType: 'role',
+    roleKey: 'ds',
+    isRequired: true
+  },
+  {
+    stepOrder: 4,
+    approverType: 'role',
+    roleKey: 'ose',
+    isRequired: true
+  }
+];

@@ -14,6 +14,7 @@ import { workflowService } from "./workflowService";
 import { lifecycleService } from "./lifecycleService";
 import { approvalService } from "./approvalService";
 import { serverNptReportSchema, insertRigSchema, insertSystemSchema, insertEquipmentSchema, insertDepartmentSchema, insertActionPartySchema, insertReportDeliverySchema, insertAlertRuleSchema, insertDelegationSchema, insertRoleAssignmentSchema } from "@shared/schema";
+import workflowRouter from "./routes/workflows";
 import { NPT_STATUS } from "@shared/status";
 import type { BillingSheetRow } from "@shared/billingTypes";
 import { z } from "zod";
@@ -1740,6 +1741,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to fetch today's queue" });
     }
   });
+
+  // Include workflow management routes
+  app.use(workflowRouter);
 
   const httpServer = createServer(app);
   return httpServer;

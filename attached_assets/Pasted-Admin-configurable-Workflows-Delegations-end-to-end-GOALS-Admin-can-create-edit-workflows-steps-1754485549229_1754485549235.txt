@@ -1,0 +1,394 @@
+Admin-configurable Workflows + Delegations (end-to-end)
+GOALS
+Admin can create/edit workflows (steps, order, approver type = Role/User) per Rig or Global default.
+
+Admin can assign users to roles per rig (e.g., Toolpusher → John).
+
+Admin can create delegations (Delegator → Delegate, date range, optional rig/role scope).
+
+On submit/approve, system routes to the current approver (applying delegation) and shows “Waiting on: Name (Role) [delegated from X]”.
+
+0) Shared constants
+Create: shared/workflow.ts
+
+ts
+Copy code
+export const NPT_STATUS = {
+  DRAFT: "DRAFT",
+  PENDING_REVIEW: "PENDING_REVIEW",
+  APPROVED: "APPROVED",
+  REJECTED: "REJECTED",
+} as const;
+export type NptStatus = typeof NPT_STATUS[keyof typeof NPT_STATUS];
+
+// Your default role keys (adjust labels in UI as you like)
+export const ROLE_KEYS = ["toolpusher","e_maintenance","ds","osc"] as const;
+export type RoleKey = typeof ROLE_KEYS[number];
+1) Database (Prisma/SQL)
+Add tables if missing (Postgres SQL shown; adapt to ORM):
+
+sql
+Copy code
+-- Workflow definition (rig-specific or global null)
+CREATE TABLE IF NOT EXISTS workflow_definitions (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  rig_id INTEGER NULL,             -- NULL = global default
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Ordered steps for a workflow
+CREATE TABLE IF NOT EXISTS workflow_steps (
+  id SERIAL PRIMARY KEY,
+  workflow_id INTEGER NOT NULL REFERENCES workflow_definitions(id) ON DELETE CASCADE,
+  step_order INTEGER NOT NULL,
+  approver_type TEXT NOT NULL,     -- 'role' | 'user'
+  role_key TEXT NULL,              -- when approver_type = 'role'
+  user_id INTEGER NULL,            -- when approver_type = 'user'
+  is_required BOOLEAN NOT NULL DEFAULT TRUE
+);
+
+-- Role → User mapping per rig
+CREATE TABLE IF NOT EXISTS role_assignments (
+  id SERIAL PRIMARY KEY,
+  rig_id INTEGER NOT NULL,
+  role_key TEXT NOT NULL,
+  user_id INTEGER NOT NULL,
+  is_active BOOLEAN NOT NULL DEFAULT TRUE
+);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_role_assign ON role_assignments(rig_id, role_key, user_id);
+
+-- Delegations (Out of Office)
+CREATE TABLE IF NOT EXISTS delegations (
+  id SERIAL PRIMARY KEY,
+  delegator_user_id INTEGER NOT NULL,
+  delegate_user_id INTEGER NOT NULL,
+  starts_at TIMESTAMPTZ NOT NULL,
+  ends_at TIMESTAMPTZ NOT NULL,
+  rig_id INTEGER NULL,             -- NULL = all rigs
+  role_key TEXT NULL,              -- NULL = all roles
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- NPT entries should have routing pointer columns
+ALTER TABLE npt_entries
+  ADD COLUMN IF NOT EXISTS current_step_order INTEGER,
+  ADD COLUMN IF NOT EXISTS current_nominal_user_id INTEGER,
+  ADD COLUMN IF NOT EXISTS current_approver_user_id INTEGER;  -- effective (after delegation)
+
+-- Approval trail (history)
+CREATE TABLE IF NOT EXISTS npt_approvals (
+  id SERIAL PRIMARY KEY,
+  report_id INTEGER NOT NULL REFERENCES npt_entries(id) ON DELETE CASCADE,
+  step_order INTEGER NOT NULL,
+  approver_user_id INTEGER NOT NULL,           -- effective actor
+  delegated_from_user_id INTEGER NULL,         -- if action done by delegate
+  action TEXT NOT NULL,                        -- 'APPROVE' | 'REJECT' | 'REQUEST_CHANGES'
+  comment TEXT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+2) Server logic (routing + delegation)
+Create: server/lib/approvals.ts
+
+ts
+Copy code
+import { prisma } from "../db";
+import { ROLE_KEYS } from "../../shared/workflow";
+
+export async function pickWorkflow(rigId: number) {
+  return prisma.workflow_definitions.findFirst({
+    where: { OR: [{ rig_id: rigId }, { rig_id: null }], is_active: true },
+    orderBy: [{ rig_id: "desc" }], // prefer rig-specific
+  });
+}
+
+export async function listSteps(workflowId: number) {
+  return prisma.workflow_steps.findMany({
+    where: { workflow_id: workflowId },
+    orderBy: { step_order: "asc" }
+  });
+}
+
+async function resolveNominalUser(rigId: number, step: any) {
+  if (step.approver_type === "user" && step.user_id) return step.user_id;
+  if (step.approver_type === "role" && step.role_key) {
+    const a = await prisma.role_assignments.findFirst({
+      where: { rig_id: rigId, role_key: step.role_key, is_active: true },
+      select: { user_id: true }
+    });
+    return a?.user_id ?? null;
+  }
+  return null;
+}
+
+async function applyDelegation(nominalUserId: number | null, rigId: number, roleKey?: string) {
+  if (!nominalUserId) return { effectiveUserId: null, delegatedFrom: null };
+  const now = new Date();
+  const d = await prisma.delegations.findFirst({
+    where: {
+      delegator_user_id: nominalUserId,
+      is_active: true,
+      starts_at: { lte: now },
+      ends_at: { gte: now },
+      AND: [
+        { OR: [{ rig_id: null }, { rig_id: rigId }] },
+        { OR: [{ role_key: null }, { role_key: roleKey ?? undefined }] }
+      ]
+    },
+    orderBy: { created_at: "desc" }
+  });
+  return d ? { effectiveUserId: d.delegate_user_id, delegatedFrom: nominalUserId }
+           : { effectiveUserId: nominalUserId, delegatedFrom: null };
+}
+
+export async function routeFirstApprover(reportId: number) {
+  const report = await prisma.npt_entries.findUnique({ where: { id: reportId } });
+  if (!report) return null;
+
+  const wf = await pickWorkflow(report.rig_id);
+  let steps = wf ? await listSteps(wf.id) : [];
+  if (!steps.length) {
+    // fallback to a simple default role workflow
+    steps = ROLE_KEYS.map((rk, i) => ({ step_order: i+1, approver_type: "role", role_key: rk }));
+  }
+
+  for (const s of steps) {
+    const nominal = await resolveNominalUser(report.rig_id, s);
+    const { effectiveUserId, delegatedFrom } = await applyDelegation(nominal, report.rig_id, s.role_key ?? undefined);
+    if (effectiveUserId) {
+      await prisma.npt_entries.update({
+        where: { id: reportId },
+        data: {
+          current_step_order: s.step_order,
+          current_nominal_user_id: nominal,
+          current_approver_user_id: effectiveUserId
+        }
+      });
+      return { stepOrder: s.step_order, nominalUserId: nominal, effectiveUserId, roleKey: s.role_key ?? null, delegatedFrom };
+    }
+  }
+
+  // none assigned → leave pointer with nominal null
+  await prisma.npt_entries.update({
+    where: { id: reportId },
+    data: { current_step_order: 1, current_nominal_user_id: null, current_approver_user_id: null }
+  });
+  return null;
+}
+
+export async function advanceToNextStep(reportId: number) {
+  const rpt = await prisma.npt_entries.findUnique({ where: { id: reportId } });
+  if (!rpt) return null;
+  const wf = await pickWorkflow(rpt.rig_id);
+  let steps = wf ? await listSteps(wf.id) : ROLE_KEYS.map((rk, i) => ({ step_order: i+1, approver_type: "role", role_key: rk }));
+
+  const next = steps.find(s => s.step_order! > (rpt.current_step_order ?? 0));
+  if (!next) return null; // end
+
+  const nominal = await resolveNominalUser(rpt.rig_id, next);
+  const { effectiveUserId } = await applyDelegation(nominal, rpt.rig_id, next.role_key ?? undefined);
+
+  await prisma.npt_entries.update({
+    where: { id: reportId },
+    data: {
+      current_step_order: next.step_order,
+      current_nominal_user_id: nominal,
+      current_approver_user_id: effectiveUserId
+    }
+  });
+  return { stepOrder: next.step_order, userId: effectiveUserId };
+}
+3) Server routes (CRUD + actions)
+Create: server/routes/workflows.ts
+
+ts
+Copy code
+import { Router } from "express";
+import { prisma } from "../db";
+import { ROLE_KEYS } from "../../shared/workflow";
+const r = Router();
+
+// Workflows CRUD
+r.get("/api/workflows", async (req,res)=>{
+  const rigId = req.query.rigId ? Number(req.query.rigId) : null;
+  const items = await prisma.workflow_definitions.findMany({
+    where: { rig_id: rigId ?? undefined },
+    orderBy: [{ rig_id: "asc" }, { id: "asc" }]
+  });
+  res.json({ items });
+});
+
+r.post("/api/workflows", async (req,res)=>{
+  const { name, rigId } = req.body;
+  const created = await prisma.workflow_definitions.create({ data: { name, rig_id: rigId ?? null, is_active: true }});
+  res.status(201).json(created);
+});
+
+r.post("/api/workflows/:id/steps/bulk", async (req,res)=>{
+  const id = Number(req.params.id);
+  const steps = req.body.steps as Array<{ step_order:number; approver_type:'role'|'user'; role_key?:string; user_id?:number; is_required?:boolean }>;
+  await prisma.$transaction([
+    prisma.workflow_steps.deleteMany({ where: { workflow_id: id }}),
+    prisma.workflow_steps.createMany({ data: steps.map(s => ({ workflow_id:id, ...s, is_required: s.is_required ?? true }))})
+  ]);
+  res.json({ ok: true });
+});
+
+// Role assignments (Role → User per rig)
+r.get("/api/role-assignments", async (req,res)=>{
+  const rigId = Number(req.query.rigId);
+  const items = await prisma.role_assignments.findMany({ where: { rig_id: rigId, is_active: true }});
+  res.json({ items, roleKeys: ROLE_KEYS });
+});
+
+r.patch("/api/role-assignments", async (req,res)=>{
+  const { rigId, roleKey, userId } = req.body;
+  const up = await prisma.role_assignments.upsert({
+    where: { id: 0 }, // use a dummy since we allow multiple; better: delete old for (rig,role) then insert new
+    update: {},
+    create: { rig_id: rigId, role_key: roleKey, user_id: userId, is_active: true }
+  });
+  // Prefer simple strategy: prisma.role_assignments.deleteMany({ where: { rig_id: rigId, role_key: roleKey } }) then create one
+  res.json({ ok: true });
+});
+
+// Delegations CRUD
+r.get("/api/delegations", async (req,res)=>{
+  const items = await prisma.delegations.findMany({ orderBy: { created_at: "desc" }});
+  res.json({ items });
+});
+
+r.post("/api/delegations", async (req,res)=>{
+  const { delegatorUserId, delegateUserId, startsAt, endsAt, rigId, roleKey, isActive } = req.body;
+  const created = await prisma.delegations.create({
+    data: {
+      delegator_user_id: delegatorUserId,
+      delegate_user_id: delegateUserId,
+      starts_at: new Date(startsAt),
+      ends_at: new Date(endsAt),
+      rig_id: rigId ?? null,
+      role_key: roleKey ?? null,
+      is_active: isActive ?? true
+    }
+  });
+  res.status(201).json(created);
+});
+
+r.delete("/api/delegations/:id", async (req,res)=>{
+  await prisma.delegations.delete({ where: { id: Number(req.params.id) }});
+  res.json({ ok: true });
+});
+
+export default r;
+Wire routes: in server/index.ts
+
+ts
+Copy code
+import workflowsRouter from "./routes/workflows";
+app.use(workflowsRouter);
+Hook routing during submit/approve
+In NPT submit route (after status → PENDING_REVIEW) call routeFirstApprover(id).
+In Approve route: create npt_approvals record and call advanceToNextStep; if none → set status APPROVED and clear pointers.
+
+4) Admin UI (Settings → Workflow Approvals)
+Create page: client/src/pages/workflow/WorkflowAdmin.tsx
+
+Tabs:
+
+Workflow Builder: choose Rig (All rigs/global or specific), list steps with drag order, per step select Approver Type (Role or User), pick Role/User, toggle Required. Buttons: Save steps.
+
+Role Assignments: per Rig, table Role → User <Select>; Save inline.
+
+Delegations: list delegations, Add Delegation (Delegator, Delegate, Start, End, optional Rig, optional Role, Active).
+
+Calls to API
+
+GET /api/workflows?rigId=... → load or create new.
+
+POST /api/workflows → create if none exists.
+
+POST /api/workflows/:id/steps/bulk → save steps.
+
+GET /api/role-assignments?rigId=... / PATCH /api/role-assignments
+
+GET /api/delegations / POST /api/delegations / DELETE /api/delegations/:id
+
+Permissions
+
+Gate this page for Admin only (your existing role guard).
+
+Expose link in sidebar: Workflow Approvals (visible to Admin).
+
+5) Approvals list: show “Waiting on”
+Update existing “Waiting On” cell to show:
+
+Effective approver name (from current_approver_user_id)
+
+If current_nominal_user_id ≠ current_approver_user_id → show small caption: “delegated from <NominalUser>”.
+
+If no pointer → show “Unassigned — Set approver” (button opens Workflow Admin pre-filtered to that rig).
+
+API already returns the IDs—join names on server or fetch user map.
+
+6) Backfill script (pointer for existing pending)
+Create: server/scripts/backfill-routing.ts
+
+ts
+Copy code
+import { prisma } from "../db";
+import { NPT_STATUS } from "../../shared/workflow";
+import { routeFirstApprover } from "../lib/approvals";
+
+(async ()=>{
+  const rows = await prisma.npt_entries.findMany({
+    where: { status: NPT_STATUS.PENDING_REVIEW, OR: [{ current_approver_user_id: null }, { current_step_order: null }]},
+    select: { id: true }
+  });
+  for (const r of rows) await routeFirstApprover(r.id);
+  console.log("Backfilled:", rows.length);
+  process.exit(0);
+})();
+Run once after deploy.
+
+7) Tests (do exactly these)
+Admin → Settings → Workflow Approvals.
+
+Create Global workflow with steps: Toolpusher → E-Maintenance → DS → OSC (all Role).
+
+For Rig 104, create a rig-specific workflow (optional).
+
+Role Assignments for Rig 104:
+
+Toolpusher → John, E-Maintenance → Sarah, DS → Haitham Supervisor, OSC → PME 103 (example).
+
+Delegation: set John → Sarah for next 7 days (Rig 104, role = Toolpusher).
+
+As reporting user, create NPT and Submit for Review (Rig 104).
+
+Approvals list shows Waiting on: Sarah (delegated from John).
+
+Login as Sarah, open the item and Approve.
+
+“Waiting on” moves to the next role (DS).
+
+Remove the delegation and submit again → Waiting on: John (no delegation tag).
+
+Delete a role assignment and submit → shows Unassigned — Set approver quick link.
+
+Acceptance
+
+Admin can build workflows, assign roles to users, and create delegations from the same admin area.
+
+New submissions route to the correct effective approver; “Waiting on” shows who and (if applicable) “delegated from”.
+
+Approvals progress step-by-step until final APPROVED.
+
+8) Notes / Quick tweaks
+To restrict who can edit role assignments & delegations, keep it Admin-only; optionally allow Rig Manager on their rigs.
+
+If you already have a Users table with roleKey, reuse it in the UI filters.
+
+If your ORM is Prisma, create models accordingly; if not, Replit AI should map SQL to your data layer without changing behavior.
+

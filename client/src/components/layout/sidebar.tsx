@@ -60,6 +60,12 @@ export default function Sidebar() {
       icon: "fas fa-cog",
       label: "Settings",
     },
+    {
+      href: "/admin/workflows",
+      icon: "fas fa-project-diagram",
+      label: "Workflows",
+      visible: user?.role === 'admin',
+    },
   ];
 
   const handleNavigation = (href: string) => {

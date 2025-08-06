@@ -1,0 +1,179 @@
+Implement Admin Workflows & Delegations (end-to-end)
+Do this exactly:
+
+0) Conventions
+Status enum: NPT_STATUS = { DRAFT, PENDING_REVIEW, APPROVED, REJECTED }
+
+Role keys (default): toolpusher, e_maintenance, ds, osc
+
+1) Database
+Create/ensure tables (adapt to ORM if Prisma/TypeORM):
+
+sql
+Copy code
+-- Workflows
+CREATE TABLE IF NOT EXISTS workflow_definitions (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  rig_id INTEGER NULL,              -- NULL = global default
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS workflow_steps (
+  id SERIAL PRIMARY KEY,
+  workflow_id INTEGER NOT NULL REFERENCES workflow_definitions(id) ON DELETE CASCADE,
+  step_order INTEGER NOT NULL,
+  approver_type TEXT NOT NULL,      -- 'role' | 'user'
+  role_key TEXT NULL,
+  user_id INTEGER NULL,
+  is_required BOOLEAN NOT NULL DEFAULT TRUE
+);
+
+-- Role→User per rig
+CREATE TABLE IF NOT EXISTS role_assignments (
+  id SERIAL PRIMARY KEY,
+  rig_id INTEGER NOT NULL,
+  role_key TEXT NOT NULL,
+  user_id INTEGER NOT NULL,
+  is_active BOOLEAN NOT NULL DEFAULT TRUE
+);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_role_assign ON role_assignments(rig_id, role_key, user_id);
+
+-- Delegations
+CREATE TABLE IF NOT EXISTS delegations (
+  id SERIAL PRIMARY KEY,
+  delegator_user_id INTEGER NOT NULL,
+  delegate_user_id INTEGER NOT NULL,
+  starts_at TIMESTAMPTZ NOT NULL,
+  ends_at TIMESTAMPTZ NOT NULL,
+  rig_id INTEGER NULL,              -- NULL = all rigs
+  role_key TEXT NULL,               -- NULL = all roles
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Routing pointers on reports
+ALTER TABLE npt_entries
+  ADD COLUMN IF NOT EXISTS current_step_order INTEGER,
+  ADD COLUMN IF NOT EXISTS current_nominal_user_id INTEGER,
+  ADD COLUMN IF NOT EXISTS current_approver_user_id INTEGER;
+
+-- Approval history
+CREATE TABLE IF NOT EXISTS npt_approvals (
+  id SERIAL PRIMARY KEY,
+  report_id INTEGER NOT NULL REFERENCES npt_entries(id) ON DELETE CASCADE,
+  step_order INTEGER NOT NULL,
+  approver_user_id INTEGER NOT NULL,
+  delegated_from_user_id INTEGER NULL,
+  action TEXT NOT NULL,             -- 'APPROVE' | 'REJECT' | 'REQUEST_CHANGES'
+  comment TEXT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+2) Shared constants
+Create shared/workflow.ts with:
+
+ts
+Copy code
+export const NPT_STATUS = { DRAFT:"DRAFT", PENDING_REVIEW:"PENDING_REVIEW", APPROVED:"APPROVED", REJECTED:"REJECTED" } as const;
+export const ROLE_KEYS = ["toolpusher","e_maintenance","ds","osc"] as const;
+export type RoleKey = typeof ROLE_KEYS[number];
+3) Server logic (routing + delegation)
+Create server/lib/approvals.ts implementing:
+
+pickWorkflow(rigId)
+
+listSteps(workflowId)
+
+routeFirstApprover(reportId) → sets current_step_order, current_nominal_user_id, current_approver_user_id (apply delegation)
+
+advanceToNextStep(reportId) → moves pointer to next step (apply delegation)
+
+(Use the versions we discussed; keep delegation rule: active within date range, matching rig/role if specified.)
+
+4) Admin APIs
+Create server/routes/workflows.ts:
+
+GET /api/workflows?rigId= → list workflow headers
+
+POST /api/workflows → create (name, rigId|null)
+
+POST /api/workflows/:id/steps/bulk → replace steps
+
+GET /api/role-assignments?rigId= → list role→user
+
+PATCH /api/role-assignments → upsert mapping { rigId, roleKey, userId }
+
+GET /api/delegations / POST /api/delegations / DELETE /api/delegations/:id
+
+Wire router in server/index.ts.
+
+5) Submission & approval hooks
+When creating/submitting NPT to PENDING_REVIEW, call routeFirstApprover(id).
+
+On Approve:
+
+insert into npt_approvals with approver_user_id (effective) and delegated_from_user_id (if any)
+
+call advanceToNextStep(id); if none → set status APPROVED and clear pointers.
+
+6) Admin UI (one page)
+Create client/src/pages/workflow/WorkflowAdmin.tsx with tabs:
+
+Workflow Builder: choose Rig/Global → drag rows (Step #, Approver Type: Role/User, RoleKey/User, Required) → Save
+
+Role Assignments: table Role→User <Select> per rig → Save inline
+
+Delegations: list + Add form (Delegator, Delegate, Start, End, optional Rig, optional Role, Active)
+
+Show link “Workflow Approvals” in sidebar for Admin only.
+
+7) Approvals UI (“Waiting on”)
+In Approvals list:
+
+Show effective approver name from current_approver_user_id
+
+If delegated: small caption “delegated from {NominalUser}”
+
+If unassigned: show “Unassigned — Set approver” button → opens Workflow Admin pre-filtered to that rig/role
+
+8) Backfill script
+Add server/scripts/backfill-routing.ts to set pointers for existing PENDING_REVIEW rows by calling routeFirstApprover for any record with null pointers. Run once after deploy.
+
+9) Seed (quick start)
+Create Global workflow with 4 steps (all Role): toolpusher → e_maintenance → ds → osc
+
+For Rig 104, set role assignments:
+
+toolpusher → John
+
+e_maintenance → Sarah
+
+ds → Haitham Supervisor
+
+osc → PME 103
+
+Optional delegation: John → Sarah (Rig 104, role toolpusher, next 7 days)
+
+10) Tests (acceptance)
+Submit NPT on Rig 104 → Approvals shows Waiting on: Sarah (delegated from John).
+
+Approve as Sarah → pointer moves to DS.
+
+Remove delegation, submit again → Waiting on: John (no delegation tag).
+
+Remove a role assignment, submit → shows Unassigned — Set approver and links to Admin editor.
+
+Final step approval sets status to APPROVED; counters update.
+
+When done, reply with:
+
+✅ “Workflow Admin page live”
+
+✅ “Routing pointer set on submit”
+
+✅ “Delegations active”
+
+✅ “Backfill count: <n>”
+
+Any places where you had to adapt paths or models.

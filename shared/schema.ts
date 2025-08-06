@@ -88,6 +88,7 @@ export const nptReports = pgTable("npt_reports", {
   rejectionReason: text("rejection_reason"),
   // Enhanced workflow fields for delegation system
   currentStepOrder: integer("current_step_order"),
+  currentNominalUserId: varchar("current_nominal_user_id").references(() => users.id),
   currentApproverUserId: varchar("current_approver_user_id").references(() => users.id),
   workflowStatus: varchar("workflow_status").default('initiated'), // initiated, pending_ds, pending_pme, pending_ose, approved, rejected
   currentApprover: varchar("current_approver"), // Current role waiting for approval (legacy)
@@ -139,9 +140,10 @@ export const workflowSteps = pgTable("workflow_steps", {
 // Per-report approval trail with enhanced tracking
 export const nptApprovals = pgTable("npt_approvals", {
   id: serial("id").primaryKey(),
-  reportId: integer("report_id").references(() => nptReports.id).notNull(),
+  reportId: integer("report_id").references(() => nptReports.id, { onDelete: "cascade" }).notNull(),
   stepOrder: integer("step_order").notNull(),
   approverUserId: varchar("approver_user_id").references(() => users.id).notNull(),
+  delegatedFromUserId: varchar("delegated_from_user_id").references(() => users.id),
   action: varchar("action").notNull(), // 'APPROVE' | 'REJECT' | 'REQUEST_CHANGES'
   comment: text("comment"),
   createdAt: timestamp("created_at").defaultNow(),
@@ -282,6 +284,8 @@ export const alertRules = pgTable("alert_rules", {
 }, (table) => [
   index("idx_alert_rules_enabled").on(table.enabled),
 ]);
+
+
 
 // SLA Configuration (keeping existing for compatibility)
 export const slaRules = pgTable("sla_rules", {
@@ -554,6 +558,8 @@ export const insertRoleAssignmentSchema = createInsertSchema(roleAssignments).om
   id: true,
   createdAt: true,
 });
+
+
 
 // Types
 export type UpsertUser = typeof users.$inferInsert;
