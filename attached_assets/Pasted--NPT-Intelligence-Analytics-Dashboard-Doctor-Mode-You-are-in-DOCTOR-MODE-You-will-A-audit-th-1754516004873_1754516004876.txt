@@ -1,0 +1,232 @@
+“NPT Intelligence + Analytics Dashboard” (Doctor Mode)
+You are in DOCTOR MODE. You will (A) audit the repo, then (B) implement AI features and an executive dashboard.
+Do not make speculative edits: return artifacts at each phase, wait for my OK.
+
+PHASE 0 — Repo Interview (return before edits)
+Provide:
+
+PROJECT_MAP (tree depth 3–4 for client/, server/, shared/, db/|prisma|drizzle, scripts/).
+
+KEY_FILES (paths only): NPT forms (single + bulk), approvals, dashboard, validation schemas (FE + BE), shared rules, status enums, auth, feature flags, API client, DB schema.
+
+SEARCH_REPORT (file:line with 1-line context) for:
+nptRules, enabledFields, cleanupByType, needsN2, needsInvestigationReport, investigation, rootCause, corrective, n2Number, approval, dashboard, kpi, embedding, ai.
+
+CURRENT_BEHAVIOR snippets (exact code):
+
+where single + bulk set disabled by NPT type;
+
+Zod schemas FE/BE;
+
+create/submit NPT routes;
+
+approvals list API;
+
+any existing dashboard code.
+
+GRID_LIB (what grid/table is used in bulk).
+
+CONFIG (how env/keys are injected; any feature flags).
+
+Stop here.
+
+PHASE 1 — AI foundation (schema + services + flags)
+1. Feature flag + config
+
+Add FEATURE_AI=true in .env.example and gate all UI/BE paths behind it.
+
+Create shared/featureFlags.ts exporting flags.
+
+server/config/ai.ts with provider-agnostic interface:
+
+ts
+Copy code
+export interface AiProvider {
+  chat(prompt: string, system?: string): Promise<string>;
+  embed(texts: string[]): Promise<number[][]>;
+}
+// Default: OpenAI-compatible; support swapping via env PROVIDER=...
+Add rate-limit (per user + per rig) and request logging.
+
+2. DB schema (Drizzle/Prisma)
+
+Table ai_artifacts:
+
+id, report_id (FK npt_entries), type ("investigation" | "summary" | "field_suggestions" | "similar_cases"),
+
+content JSONB, model, tokens, provider, created_by, created_at.
+
+Table npt_embeddings:
+
+id, report_id (FK), embedding vector/JSON, dim, model, created_at.
+
+Optional ai_jobs for async tasks.
+
+3. Server endpoints
+
+POST /api/ai/investigation
+Input: { reportId?: number } or full NPT payload.
+Output: { report, outline, rootCauses[], correctiveActions[], risks[], narrative }.
+
+POST /api/ai/suggest-fields
+Input: free text fields; Output: { system?, equipment?, thePart?, department?, rootCause?, corrective?, actionParty? } with confidences.
+
+GET /api/ai/similar?reportId=...&k=5
+Returns similar NPTs using embeddings.
+
+POST /api/ai/embed-missing (admin) to backfill npt_embeddings.
+
+All endpoints save artifacts in ai_artifacts (and embeddings when relevant).
+
+4. Embedding pipeline
+
+On NPT Submit for Review: enqueue embedding job using report.summaryText() (compose from fields), then store vector.
+
+Create a cosine-similarity query (DB or in-memory index).
+
+Deliverables: unified diffs for schema + new routes, and Postman curl examples.
+
+PHASE 2 — AI in the UI (non-destructive, safe)
+1. “AI Assist” panel in Single + Bulk
+
+Button “AI Suggest” → calls /api/ai/suggest-fields, previews suggested values, and lets user Apply per field.
+
+Button “Generate Investigation Report” → calls /api/ai/investigation, opens side panel with:
+
+executive summary, event timeline, suspected root causes, corrective & future actions, risks.
+
+Save to Investigation appends to investigationAiText.
+
+Button “Find Similar Cases” → calls /api/ai/similar and shows 5 most similar NPT reports with key fields and quick links.
+
+2. Approvals page enhancements
+
+Each pending row shows a compact AI summary (/api/ai/investigation quick mode) and a risk badge (low/med/high from the AI output).
+
+“Waiting On” stays as-is; add a hover summary.
+
+3. Safety
+
+Show token/usage estimate, warn before long calls.
+
+Enforce FEATURE_AI.
+
+Persist AI outputs as drafts until user confirms Apply.
+
+Deliverables: diffs for components, screenshots of AI panels, and a short demo video link (optional).
+
+PHASE 3 — Executive Dashboard (filters + KPIs + charts)
+1. API
+
+GET /api/analytics/kpis?from=...&to=...&rigId?&type?&dept?
+Returns:
+
+totalReports, totalHours, hoursByType, hoursByRig, mtbf? (optional),
+
+pending, approved, rejected, draft,
+
+avgApprovalSLA (hrs), longestWaitingUser, mostActiveApprover.
+
+GET /api/analytics/series?group=day|week|month&stack=type|system|dept
+Returns time series (hours).
+
+GET /api/analytics/pareto?dim=rootCause|system|equipment
+Returns top-N with cumulative % (Pareto).
+
+2. UI (new page: /analytics)
+
+Filters: date range, rig(s), NPT type (Contractual/Abraj), department, system.
+
+KPI cards:
+
+NPT Hours (MTD/YTD), Pending / Approved / Rejected / Draft,
+
+Avg Approval SLA, Top Root Cause, Top System, Top Rig.
+
+Charts:
+
+Trend (area/line) of NPT hours over time.
+
+Pareto of root causes (bar with cumulative line).
+
+Stacked bars by type/system/department.
+
+Approval pipeline (funnel: Submitted → Pending → Approved/Rejected).
+
+Drill-through: click a bar/point to open filtered NPT list.
+
+3. Performance
+
+Server caches KPI responses for 2–5 minutes (by filter hash).
+
+Lazy-load charts; no blocking calls.
+
+Deliverables: diffs + screenshots of dashboard with real sample data.
+
+PHASE 4 — Tests, seeds, and docs
+1. Seeds
+
+scripts/seed-analytics.ts to generate ~200 synthetic NPTs across 3 rigs, both types, different departments; attach embeddings for 50+ items.
+
+2. Tests
+
+Unit tests for:
+needsN2, needsInvestigationReport, embedding cosine similarity, AI prompt builders (deterministic stubs).
+
+Integration test for /api/ai/suggest-fields with a stub provider.
+
+3. Docs
+
+Markdown: docs/ai.md, docs/analytics.md with env vars, flags, security notes, curl examples, and UI walkthrough.
+
+Stop and return: diffs + test run output + screenshots.
+
+AI Prompting (server-side templates)
+Use structured prompts (no PII leakage). Example investigation template:
+
+css
+Copy code
+System: NPT Investigation Writer
+You write structured, factual NPT investigation reports.
+
+INPUT:
+- NPT Type: {nptType}
+- Hours: {hours}
+- Department: {department}
+- System: {system}
+- Equipment: {equipment}
+- The Part: {thePart}
+- Failure Desc: {failureDesc}
+- Root Cause (user): {rootCause}
+- Corrective: {corrective}
+- Future Action: {futureAction}
+- Action Party: {actionParty}
+- Free notes: {notes}
+
+TASKS:
+1) Executive Summary (3-5 bullets).
+2) Timeline of events.
+3) Suspected root causes with confidence 0-1.
+4) Corrective & Future actions with priority.
+5) Risks & monitoring.
+Return valid JSON:
+{ "summary": "...", "timeline": [...], "rootCauses": [...], "correctiveActions": [...], "risks": [...] }
+For suggest-fields, prompt with few-shot examples from recent NPTs (omit IDs/user names), and always return JSON with confidence.
+
+Acceptance Criteria (I will verify)
+All AI features behind FEATURE_AI.
+
+No hard-coded provider calls; one provider interface.
+
+ai_artifacts and npt_embeddings populated; /ai/similar returns sensible results.
+
+AI Assist panel: Generate Investigation, Suggest Fields, Similar Cases working and persisted only on Apply.
+
+Dashboard: KPIs + Trend + Pareto + Stacked + Funnel; filters work; drill-through works.
+
+Tests pass; seeds load; docs exist.
+
+Diffs + screenshots provided for every change.
+
+Stop after PHASE 0 artifacts. Wait for my OK to proceed.
+
