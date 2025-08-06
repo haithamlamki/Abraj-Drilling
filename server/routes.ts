@@ -362,7 +362,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user.claims.sub;
       const user = await storage.getUser(userId);
       
-      if (!user?.rigId) {
+      // Only require rig assignment for non-admin users
+      if (!user?.rigId && user?.role !== 'admin') {
         return res.status(400).json({ message: "User must be assigned to a rig" });
       }
       
@@ -377,7 +378,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const validatedData = insertNptReportSchema.parse({
         ...req.body,
         userId,
-        rigId: user.rigId,
+        rigId: user.rigId || req.body.rigId, // Allow admin to specify rigId, fall back to user's rigId
       });
       
       // Business rule validations
