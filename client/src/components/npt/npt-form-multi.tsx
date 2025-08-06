@@ -206,6 +206,12 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
     setSelected(new Set()); // clear selection after duplication
   };
 
+  const deleteSelected = () => {
+    if (!selected.size) return;
+    setRows(prev => prev.filter(row => !selected.has(row.id)));
+    setSelected(new Set()); // clear selection after deletion
+  };
+
   const removeRow = (index: number) => {
     const rowId = rows[index].id;
     setRows(prev => prev.filter((_, i) => i !== index));
@@ -237,7 +243,8 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "d") {
         e.preventDefault();
         // duplicate the last selected row
-        const last = [...selected].pop();
+        const selectedArray = Array.from(selected);
+        const last = selectedArray[selectedArray.length - 1];
         if (!last) return;
         const idx = rows.findIndex(r => r.id === last);
         if (idx >= 0) duplicateRow(idx);
@@ -286,8 +293,11 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
         }
       }));
 
-      const response = await apiRequest('POST', '/api/npt-reports/from-billing', { rows: billingRows });
-      return response.json();
+      const response = await apiRequest('/api/npt-reports/from-billing', {
+        method: 'POST',
+        body: { rows: billingRows }
+      });
+      return response;
     },
     onSuccess: (data) => {
       toast({
@@ -362,6 +372,19 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
               >
                 <Copy className="h-4 w-4" />
                 Duplicate selected ({selected.size})
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={deleteSelected}
+                disabled={selected.size === 0}
+                data-testid="button-delete-selected"
+                className="flex items-center gap-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+                title="Delete selected rows"
+              >
+                <Trash2 className="h-4 w-4" />
+                Delete selected ({selected.size})
               </Button>
               {selected.size > 0 && (
                 <span className="text-xs text-gray-600">
@@ -455,7 +478,7 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
                 <tbody>
                   {rows.map((row, index) => {
                     // Calculate enabled fields for this row based on NPT type
-                    const enabledFieldsState = enabledFields({ nptType: row.nptType });
+                    const enabledFieldsState = enabledFields(row.nptType);
                     
                     return (
                       <tr key={row.id} className="bg-white border-b border-gray-200">
