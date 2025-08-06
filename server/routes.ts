@@ -1801,9 +1801,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Only admins can seed data" });
       }
       
-      const { seedApprovals } = await import('./scripts/seedApprovals.js');
-      const result = await seedApprovals();
-      res.json({ success: true, ...result });
+      // Create test NPT reports and route them manually for now
+      const rigId = 2; // Rig 104
+      
+      const testReports = [
+        {
+          rigId,
+          userId: 'supervisor-001',
+          date: new Date('2025-01-06'),
+          hours: '2.5',
+          nptType: 'Contractual',
+          system: 'Mud Pumps',
+          parentEquipment: 'Pump 1',
+          immediateCause: 'Pump seal failure requiring replacement',
+          rootCause: 'Worn seal due to normal operation',
+          correctiveAction: 'Replaced pump seal with new one',
+          futureAction: 'Monitor seal condition during operations',
+          department: 'E-Maintenance',
+          actionParty: 'E.Maintenance',
+          wellName: 'Well A-101',
+          status: 'PENDING_REVIEW',
+          currentStepOrder: 1,
+          currentApproverUserId: 'toolpusher-001', // John's ID from workflow assignments
+        }
+      ];
+
+      const createdReports = await storage.createNptReports(testReports);
+      
+      res.json({ 
+        success: true, 
+        reportsCreated: createdReports.length,
+        message: `Created ${createdReports.length} test reports for approval` 
+      });
     } catch (error) {
       console.error('Error seeding approvals:', error);
       res.status(500).json({ error: 'Failed to seed approval test data' });

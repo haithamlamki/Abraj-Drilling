@@ -80,6 +80,7 @@ export interface IStorage {
   getNptReports(filters?: { rigId?: number; userId?: string; status?: string }): Promise<NptReport[]>;
   getNptReport(id: number): Promise<NptReport | undefined>;
   createNptReport(report: InsertNptReport): Promise<NptReport>;
+  createNptReports(reports: InsertNptReport[]): Promise<NptReport[]>;
   updateNptReport(id: number, report: Partial<NptReport>): Promise<NptReport>;
   deleteNptReport(id: number): Promise<void>;
   
@@ -281,6 +282,25 @@ export class DatabaseStorage implements IStorage {
       hours: report.hours.toString(),
     }).returning();
     return newReport;
+  }
+
+  async createNptReports(reports: InsertNptReport[]): Promise<NptReport[]> {
+    const processedReports = reports.map(report => {
+      const date = new Date(report.date);
+      const year = date.getFullYear();
+      const month = date.toLocaleDateString('en-US', { month: 'short' });
+      
+      return {
+        ...report,
+        date,
+        year,
+        month,
+        hours: typeof report.hours === 'number' ? report.hours.toString() : report.hours,
+      };
+    });
+    
+    const newReports = await db.insert(nptReports).values(processedReports).returning();
+    return newReports;
   }
   
   async updateNptReport(id: number, report: Partial<NptReport>): Promise<NptReport> {
