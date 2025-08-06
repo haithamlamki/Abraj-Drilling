@@ -45,10 +45,16 @@ import {
   type InsertReportDelivery,
   type AlertRule,
   type InsertAlertRule,
+  type Delegation,
+  type InsertDelegation,
+  type RoleAssignment,
+  type InsertRoleAssignment,
+  delegations,
+  roleAssignments,
 } from "@shared/schema";
 import type { BillingSheetUpload, BillingUploadResult } from "@shared/billingTypes";
 import { db } from "./db";
-import { eq, desc, and, or, count } from "drizzle-orm";
+import { eq, desc, and, or, count, inArray } from "drizzle-orm";
 import { NPT_STATUS } from "@shared/status";
 
 export interface IStorage {
@@ -123,6 +129,18 @@ export interface IStorage {
   createAlertRule(rule: InsertAlertRule): Promise<AlertRule>;
   updateAlertRule(id: number, updates: Partial<AlertRule>): Promise<AlertRule>;
   deleteAlertRule(id: number): Promise<void>;
+
+  // Delegation operations for workflow management
+  getDelegations(filters?: { userId?: string; rigId?: number }): Promise<Delegation[]>;
+  getDelegation(id: number): Promise<Delegation | undefined>;
+  createDelegation(data: InsertDelegation): Promise<Delegation>;
+  deleteDelegation(id: number): Promise<boolean>;
+
+  // Role Assignment operations
+  getRoleAssignments(rigId?: number): Promise<RoleAssignment[]>;
+  createRoleAssignment(data: InsertRoleAssignment): Promise<RoleAssignment>;
+  updateRoleAssignment(id: number, data: Partial<InsertRoleAssignment>): Promise<RoleAssignment>;
+  deleteRoleAssignment(id: number): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -667,6 +685,72 @@ export class DatabaseStorage implements IStorage {
   
   async deleteAlertRule(id: number): Promise<void> {
     await db.delete(alertRules).where(eq(alertRules.id, id));
+  }
+
+  // Delegation operations for workflow management
+  async getDelegations(filters?: { userId?: string; rigId?: number }): Promise<Delegation[]> {
+    let conditions: any[] = [];
+    
+    if (filters?.userId) {
+      conditions.push(
+        or(
+          eq(delegations.delegatorUserId, filters.userId),
+          eq(delegations.delegateUserId, filters.userId)
+        )
+      );
+    }
+    
+    if (filters?.rigId) {
+      conditions.push(eq(delegations.rigId, filters.rigId));
+    }
+    
+    if (conditions.length > 0) {
+      return await db.select().from(delegations).where(and(...conditions)).orderBy(delegations.createdAt);
+    } else {
+      return await db.select().from(delegations).orderBy(delegations.createdAt);
+    }
+  }
+
+  async getDelegation(id: number): Promise<Delegation | undefined> {
+    const [delegation] = await db.select().from(delegations).where(eq(delegations.id, id));
+    return delegation;
+  }
+
+  async createDelegation(data: InsertDelegation): Promise<Delegation> {
+    const [delegation] = await db.insert(delegations).values(data).returning();
+    return delegation;
+  }
+
+  async deleteDelegation(id: number): Promise<boolean> {
+    const result = await db.delete(delegations).where(eq(delegations.id, id));
+    return (result.rowCount || 0) > 0;
+  }
+
+  // Role Assignment operations
+  async getRoleAssignments(rigId?: number): Promise<RoleAssignment[]> {
+    if (rigId) {
+      return await db.select().from(roleAssignments).where(eq(roleAssignments.rigId, rigId)).orderBy(roleAssignments.createdAt);
+    }
+    return await db.select().from(roleAssignments).orderBy(roleAssignments.createdAt);
+  }
+
+  async createRoleAssignment(data: InsertRoleAssignment): Promise<RoleAssignment> {
+    const [assignment] = await db.insert(roleAssignments).values(data).returning();
+    return assignment;
+  }
+
+  async updateRoleAssignment(id: number, data: Partial<InsertRoleAssignment>): Promise<RoleAssignment> {
+    const [updated] = await db.update(roleAssignments)
+      .set(data)
+      .where(eq(roleAssignments.id, id))
+      .returning();
+    if (!updated) throw new Error('Role assignment not found');
+    return updated;
+  }
+
+  async deleteRoleAssignment(id: number): Promise<boolean> {
+    const result = await db.delete(roleAssignments).where(eq(roleAssignments.id, id));
+    return (result.rowCount || 0) > 0;
   }
 }
 

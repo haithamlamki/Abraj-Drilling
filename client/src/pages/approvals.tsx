@@ -39,9 +39,21 @@ export default function ApprovalsPage() {
     }
   }, [isAuthenticated, isLoading, toast]);
 
-  // Fetch data
-  const { data: reports = [] } = useQuery<NptReport[]>({ 
-    queryKey: ['/api/npt-reports'],
+  // Enhanced query with "Waiting On" information
+  const { data: reports = [] } = useQuery({ 
+    queryKey: ['/api/approvals/list', activeTab],
+    queryFn: async () => {
+      const status = activeTab === "pending" 
+        ? NPT_STATUS.PENDING_REVIEW 
+        : activeTab === "approved" 
+          ? NPT_STATUS.APPROVED 
+          : activeTab === "rejected"
+            ? NPT_STATUS.REJECTED
+            : NPT_STATUS.DRAFT;
+      
+      const response = await apiRequest(`/api/approvals/list?status=${status}`);
+      return response.items || [];
+    },
     enabled: isAuthenticated 
   });
   
@@ -55,43 +67,41 @@ export default function ApprovalsPage() {
     enabled: isAuthenticated 
   });
 
-  // Filter reports by status using consistent status constants
-  const pendingReports = reports.filter(r => r.status === NPT_STATUS.PENDING_REVIEW);
-  const approvedReports = reports.filter(r => r.status === NPT_STATUS.APPROVED);
-  const rejectedReports = reports.filter(r => r.status === NPT_STATUS.REJECTED);
-  const draftReports = reports.filter(r => r.status === NPT_STATUS.DRAFT);
+  // Reports are already filtered by status from the API
+  const displayReports = reports;
 
-  // Approval mutations
+  // Enhanced approval mutations using new workflow service
   const approveReportMutation = useMutation({
     mutationFn: async (reportId: number) => 
-      apiRequest(`/api/npt-reports/${reportId}/approve`, {
+      apiRequest(`/api/approvals/${reportId}/approve`, {
         method: 'POST',
+        body: JSON.stringify({ action: "APPROVE" }),
       }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/npt-reports'] });
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/approvals/list'] });
       setIsReviewDialogOpen(false);
       setSelectedReport(null);
       toast({
         title: "Success",
-        description: "Report approved successfully"
+        description: data.message || "Report approved successfully"
       });
     },
   });
 
   const rejectReportMutation = useMutation({
     mutationFn: async ({ reportId, reason }: { reportId: number; reason: string }) => 
-      apiRequest(`/api/npt-reports/${reportId}/reject`, {
+      apiRequest(`/api/approvals/${reportId}/approve`, {
         method: 'POST',
-        body: JSON.stringify({ reason }),
+        body: JSON.stringify({ action: "REJECT", comment: reason }),
       }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/npt-reports'] });
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/approvals/list'] });
       setIsReviewDialogOpen(false);
       setSelectedReport(null);
       setRejectionReason("");
       toast({
         title: "Success",
-        description: "Report rejected"
+        description: data.message || "Report rejected"
       });
     },
   });
@@ -148,7 +158,7 @@ export default function ApprovalsPage() {
     }
   };
 
-  const ReportsTable = ({ reports, showActions = true }: { reports: NptReport[]; showActions?: boolean }) => (
+  const ReportsTable = ({ reports, showActions = true }: { reports: any[]; showActions?: boolean }) => (
     <Table>
       <TableHeader>
         <TableRow>
@@ -158,6 +168,7 @@ export default function ApprovalsPage() {
           <TableHead>Hours</TableHead>
           <TableHead>System</TableHead>
           <TableHead>Status</TableHead>
+          <TableHead>Waiting On</TableHead>
           <TableHead>Submitted By</TableHead>
           {showActions && <TableHead>Actions</TableHead>}
         </TableRow>
@@ -174,6 +185,23 @@ export default function ApprovalsPage() {
               <TableCell>{report.hours}</TableCell>
               <TableCell>{system?.name || report.system || '-'}</TableCell>
               <TableCell>{getStatusBadge(report.status || 'draft')}</TableCell>
+              <TableCell>
+                {report.waitingOn && report.status === NPT_STATUS.PENDING_REVIEW ? (
+                  <div className="flex items-center gap-2">
+                    <Avatar className="w-6 h-6">
+                      <AvatarFallback className="text-xs bg-blue-100 text-blue-800">
+                        {report.waitingOn.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium">{report.waitingOn}</span>
+                      {report.waitingOnRole && (
+                        <span className="text-xs text-gray-500 capitalize">{report.waitingOnRole}</span>
+                      )}
+                    </div>
+                  </div>
+                ) : "—"}
+              </TableCell>
               <TableCell>{report.userId}</TableCell>
               {showActions && (
                 <TableCell>
@@ -209,7 +237,7 @@ export default function ApprovalsPage() {
         })}
         {reports.length === 0 && (
           <TableRow>
-            <TableCell colSpan={showActions ? 8 : 7} className="text-center py-8 text-gray-500">
+            <TableCell colSpan={showActions ? 9 : 8} className="text-center py-8 text-gray-500">
               No reports found
             </TableCell>
           </TableRow>
@@ -361,7 +389,7 @@ export default function ApprovalsPage() {
                     <Clock className="h-8 w-8 text-orange-600" />
                     <div className="ml-4">
                       <p className="text-sm font-medium text-gray-600">Pending Review</p>
-                      <p className="text-2xl font-bold">{pendingReports.length}</p>
+                      <p className="text-2xl font-bold">{displayReports.filter(r => r.status === NPT_STATUS.PENDING_REVIEW).length}</p>
                     </div>
                   </div>
                 </CardContent>
@@ -372,7 +400,7 @@ export default function ApprovalsPage() {
                     <CheckCircle className="h-8 w-8 text-green-600" />
                     <div className="ml-4">
                       <p className="text-sm font-medium text-gray-600">Approved</p>
-                      <p className="text-2xl font-bold">{approvedReports.length}</p>
+                      <p className="text-2xl font-bold">—</p>
                     </div>
                   </div>
                 </CardContent>
@@ -383,7 +411,7 @@ export default function ApprovalsPage() {
                     <XCircle className="h-8 w-8 text-red-600" />
                     <div className="ml-4">
                       <p className="text-sm font-medium text-gray-600">Rejected</p>
-                      <p className="text-2xl font-bold">{rejectedReports.length}</p>
+                      <p className="text-2xl font-bold">—</p>
                     </div>
                   </div>
                 </CardContent>
@@ -394,7 +422,7 @@ export default function ApprovalsPage() {
                     <MessageSquare className="h-8 w-8 text-blue-600" />
                     <div className="ml-4">
                       <p className="text-sm font-medium text-gray-600">Drafts</p>
-                      <p className="text-2xl font-bold">{draftReports.length}</p>
+                      <p className="text-2xl font-bold">—</p>
                     </div>
                   </div>
                 </CardContent>
@@ -406,19 +434,19 @@ export default function ApprovalsPage() {
               <TabsList className="grid w-full grid-cols-4">
                 <TabsTrigger value="pending" className="flex items-center gap-2">
                   <Clock className="h-4 w-4" />
-                  Pending ({pendingReports.length})
+                  Pending Review
                 </TabsTrigger>
                 <TabsTrigger value="approved" className="flex items-center gap-2">
                   <CheckCircle className="h-4 w-4" />
-                  Approved ({approvedReports.length})
+                  Approved
                 </TabsTrigger>
                 <TabsTrigger value="rejected" className="flex items-center gap-2">
                   <XCircle className="h-4 w-4" />
-                  Rejected ({rejectedReports.length})
+                  Rejected
                 </TabsTrigger>
-                <TabsTrigger value="drafts" className="flex items-center gap-2">
+                <TabsTrigger value="draft" className="flex items-center gap-2">
                   <MessageSquare className="h-4 w-4" />
-                  Drafts ({draftReports.length})
+                  Draft
                 </TabsTrigger>
               </TabsList>
 
@@ -428,7 +456,7 @@ export default function ApprovalsPage() {
                     <CardTitle>Reports Pending Review</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <ReportsTable reports={pendingReports} />
+                    <ReportsTable reports={displayReports} />
                   </CardContent>
                 </Card>
               </TabsContent>
@@ -439,7 +467,7 @@ export default function ApprovalsPage() {
                     <CardTitle>Approved Reports</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <ReportsTable reports={approvedReports} showActions={false} />
+                    <ReportsTable reports={displayReports} showActions={false} />
                   </CardContent>
                 </Card>
               </TabsContent>
@@ -450,18 +478,18 @@ export default function ApprovalsPage() {
                     <CardTitle>Rejected Reports</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <ReportsTable reports={rejectedReports} />
+                    <ReportsTable reports={displayReports} />
                   </CardContent>
                 </Card>
               </TabsContent>
 
-              <TabsContent value="drafts">
+              <TabsContent value="draft">
                 <Card>
                   <CardHeader>
                     <CardTitle>Draft Reports</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <ReportsTable reports={draftReports} />
+                    <ReportsTable reports={displayReports} />
                   </CardContent>
                 </Card>
               </TabsContent>

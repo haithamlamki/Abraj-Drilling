@@ -12,7 +12,8 @@ import { BillingProcessor } from "./billingProcessor";
 import { processPDFBilling, enhanceBillingRowWithNPTData } from "./pdfProcessor";
 import { workflowService } from "./workflowService";
 import { lifecycleService } from "./lifecycleService";
-import { serverNptReportSchema, insertRigSchema, insertSystemSchema, insertEquipmentSchema, insertDepartmentSchema, insertActionPartySchema, insertReportDeliverySchema, insertAlertRuleSchema } from "@shared/schema";
+import { approvalService } from "./approvalService";
+import { serverNptReportSchema, insertRigSchema, insertSystemSchema, insertEquipmentSchema, insertDepartmentSchema, insertActionPartySchema, insertReportDeliverySchema, insertAlertRuleSchema, insertDelegationSchema, insertRoleAssignmentSchema } from "@shared/schema";
 import { NPT_STATUS } from "@shared/status";
 import type { BillingSheetRow } from "@shared/billingTypes";
 import { z } from "zod";
@@ -1191,6 +1192,182 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error submitting report for approval:", error);
       res.status(500).json({ message: "Failed to submit report for approval" });
+    }
+  });
+
+  // =============================================================================
+  // ENHANCED APPROVAL WORKFLOW WITH DELEGATIONS
+  // =============================================================================
+
+  // Route report to next approver after submission
+  app.post('/api/npt-reports/:id/route', isAuthenticated, async (req: any, res) => {
+    try {
+      const reportId = parseInt(req.params.id);
+      const result = await approvalService.computeNextApprover(reportId);
+      
+      if (result) {
+        res.json({ 
+          success: true, 
+          routed: true, 
+          nextApprover: result.approver,
+          stepOrder: result.stepOrder
+        });
+      } else {
+        res.json({ success: true, routed: false, message: "No workflow defined or all steps completed" });
+      }
+    } catch (error) {
+      console.error("Error routing report:", error);
+      res.status(500).json({ message: "Failed to route report" });
+    }
+  });
+
+  // Enhanced approvals list with "Waiting On" information
+  app.get('/api/approvals/list', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      const status = req.query.status || NPT_STATUS.PENDING_REVIEW;
+
+      const filters: any = { status };
+      if (user?.role === 'drilling_manager') {
+        filters.userId = userId;
+      } else if (user?.rigId) {
+        filters.rigId = user.rigId;
+      }
+
+      const reports = await storage.getNptReports(filters);
+      
+      // Get approver information for each report
+      const enhancedReports = await Promise.all(
+        reports.map(async (report) => {
+          let waitingOn = "—";
+          let waitingOnRole = "";
+          let waitingOnEmail = "";
+
+          if (report.currentApproverUserId) {
+            const approver = await storage.getUser(report.currentApproverUserId);
+            if (approver) {
+              waitingOn = approver.firstName || approver.email || "Unknown User";
+              waitingOnEmail = approver.email || "";
+              waitingOnRole = approver.role || "";
+            }
+          }
+
+          return {
+            ...report,
+            waitingOn,
+            waitingOnRole,
+            waitingOnEmail,
+            currentStepOrder: report.currentStepOrder,
+            currentApproverUserId: report.currentApproverUserId
+          };
+        })
+      );
+
+      res.json({ items: enhancedReports });
+    } catch (error) {
+      console.error("Error fetching approvals list:", error);
+      res.status(500).json({ message: "Failed to fetch approvals list" });
+    }
+  });
+
+  // Process approval (approve/reject)
+  app.post('/api/approvals/:reportId/approve', isAuthenticated, async (req: any, res) => {
+    try {
+      const reportId = parseInt(req.params.reportId);
+      const userId = req.user.claims.sub;
+      const { action, comment } = req.body;
+
+      const result = await approvalService.processApproval({
+        reportId,
+        userId,
+        action: action || "APPROVE",
+        comment
+      });
+
+      if (!result.success) {
+        return res.status(403).json({ message: "Not authorized to approve this report" });
+      }
+
+      res.json({
+        success: true,
+        finalStatus: result.finalStatus,
+        nextApprover: result.nextApprover,
+        message: result.finalStatus ? `Report ${result.finalStatus.toLowerCase()}` : "Approval processed"
+      });
+    } catch (error) {
+      console.error("Error processing approval:", error);
+      res.status(500).json({ message: "Failed to process approval" });
+    }
+  });
+
+  // Get approval history for a report
+  app.get('/api/npt-reports/:id/approval-history', isAuthenticated, async (req: any, res) => {
+    try {
+      const reportId = parseInt(req.params.id);
+      const history = await approvalService.getApprovalHistory(reportId);
+      res.json(history);
+    } catch (error) {
+      console.error("Error fetching approval history:", error);
+      res.status(500).json({ message: "Failed to fetch approval history" });
+    }
+  });
+
+  // DELEGATION MANAGEMENT ROUTES
+
+  // Get delegations
+  app.get('/api/delegations', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { rigId } = req.query;
+      
+      // Get delegations where user is delegator or delegate
+      const delegations = await storage.getDelegations({
+        userId,
+        rigId: rigId ? parseInt(rigId) : undefined
+      });
+      
+      res.json(delegations);
+    } catch (error) {
+      console.error("Error fetching delegations:", error);
+      res.status(500).json({ message: "Failed to fetch delegations" });
+    }
+  });
+
+  // Create delegation
+  app.post('/api/delegations', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const delegationData = insertDelegationSchema.parse({
+        ...req.body,
+        delegatorUserId: userId
+      });
+      
+      const delegation = await storage.createDelegation(delegationData);
+      res.json(delegation);
+    } catch (error) {
+      console.error("Error creating delegation:", error);
+      res.status(500).json({ message: "Failed to create delegation" });
+    }
+  });
+
+  // Delete delegation
+  app.delete('/api/delegations/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const delegationId = parseInt(req.params.id);
+      const userId = req.user.claims.sub;
+      
+      // Verify ownership before deletion
+      const delegation = await storage.getDelegation(delegationId);
+      if (!delegation || delegation.delegatorUserId !== userId) {
+        return res.status(403).json({ message: "Cannot delete delegation" });
+      }
+      
+      await storage.deleteDelegation(delegationId);
+      res.json({ success: true, message: "Delegation deleted" });
+    } catch (error) {
+      console.error("Error deleting delegation:", error);
+      res.status(500).json({ message: "Failed to delete delegation" });
     }
   });
 

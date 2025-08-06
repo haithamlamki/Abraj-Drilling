@@ -86,9 +86,11 @@ export const nptReports = pgTable("npt_reports", {
   wellName: varchar("well_name"),
   status: varchar("status").default('Draft'), // Draft, Pending Review, Approved, Rejected
   rejectionReason: text("rejection_reason"),
-  // Workflow fields
+  // Enhanced workflow fields for delegation system
+  currentStepOrder: integer("current_step_order"),
+  currentApproverUserId: varchar("current_approver_user_id").references(() => users.id),
   workflowStatus: varchar("workflow_status").default('initiated'), // initiated, pending_ds, pending_pme, pending_ose, approved, rejected
-  currentApprover: varchar("current_approver"), // Current role waiting for approval
+  currentApprover: varchar("current_approver"), // Current role waiting for approval (legacy)
   workflowPath: varchar("workflow_path"), // drilling or e-maintenance
   initiatedBy: varchar("initiated_by").references(() => users.id),
   initiatedAt: timestamp("initiated_at"),
@@ -110,6 +112,72 @@ export const workflowApprovals = pgTable("workflow_approvals", {
 }, (table) => [
   index("idx_workflow_approvals_report").on(table.reportId),
   index("idx_workflow_approvals_approver").on(table.approverId),
+]);
+
+// Workflow definitions (scoped per rig; null = global default)
+export const workflowDefinitions = pgTable("workflow_definitions", {
+  id: serial("id").primaryKey(),
+  name: varchar("name").notNull(),
+  rigId: integer("rig_id").references(() => rigs.id), // null = global default
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Workflow steps configuration
+export const workflowSteps = pgTable("workflow_steps", {
+  id: serial("id").primaryKey(),
+  workflowId: integer("workflow_id").references(() => workflowDefinitions.id).notNull(),
+  stepOrder: integer("step_order").notNull(),
+  approverType: varchar("approver_type").notNull(), // 'role' | 'user'
+  roleKey: varchar("role_key"), // when approver_type = 'role'
+  userId: varchar("user_id").references(() => users.id), // when approver_type = 'user'
+  isRequired: boolean("is_required").notNull().default(true),
+}, (table) => [
+  index("idx_workflow_steps_workflow").on(table.workflowId),
+]);
+
+// Per-report approval trail with enhanced tracking
+export const nptApprovals = pgTable("npt_approvals", {
+  id: serial("id").primaryKey(),
+  reportId: integer("report_id").references(() => nptReports.id).notNull(),
+  stepOrder: integer("step_order").notNull(),
+  approverUserId: varchar("approver_user_id").references(() => users.id).notNull(),
+  action: varchar("action").notNull(), // 'APPROVE' | 'REJECT' | 'REQUEST_CHANGES'
+  comment: text("comment"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_npt_approvals_report").on(table.reportId),
+  index("idx_npt_approvals_approver").on(table.approverUserId),
+]);
+
+// Delegations for out-of-office approvals
+export const delegations = pgTable("delegations", {
+  id: serial("id").primaryKey(),
+  delegatorUserId: varchar("delegator_user_id").references(() => users.id).notNull(),
+  delegateUserId: varchar("delegate_user_id").references(() => users.id).notNull(),
+  startsAt: timestamp("starts_at").notNull(),
+  endsAt: timestamp("ends_at").notNull(),
+  rigId: integer("rig_id").references(() => rigs.id), // null = all rigs
+  roleKey: varchar("role_key"), // null = all roles
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_delegations_delegator").on(table.delegatorUserId),
+  index("idx_delegations_delegate").on(table.delegateUserId),
+  index("idx_delegations_active").on(table.isActive),
+]);
+
+// Role assignments (which users are assigned to roles for specific rigs)
+export const roleAssignments = pgTable("role_assignments", {
+  id: serial("id").primaryKey(),
+  rigId: integer("rig_id").references(() => rigs.id).notNull(),
+  roleKey: varchar("role_key").notNull(), // toolpusher, e_maintenance, ds, ose
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_role_assignments_rig_role").on(table.rigId, table.roleKey),
+  index("idx_role_assignments_user").on(table.userId),
 ]);
 
 // Monthly NPT Report tracking (aggregation of daily entries)
@@ -463,6 +531,30 @@ export const insertAlertRuleSchema = createInsertSchema(alertRules).omit({
   updatedAt: true,
 });
 
+export const insertWorkflowDefinitionSchema = createInsertSchema(workflowDefinitions).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertWorkflowStepSchema = createInsertSchema(workflowSteps).omit({
+  id: true,
+});
+
+export const insertNptApprovalSchema = createInsertSchema(nptApprovals).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertDelegationSchema = createInsertSchema(delegations).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertRoleAssignmentSchema = createInsertSchema(roleAssignments).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Types
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
@@ -497,3 +589,15 @@ export type ReportDelivery = typeof reportDeliveries.$inferSelect;
 export type InsertReportDelivery = z.infer<typeof insertReportDeliverySchema>;
 export type AlertRule = typeof alertRules.$inferSelect;
 export type InsertAlertRule = z.infer<typeof insertAlertRuleSchema>;
+
+// Enhanced workflow types for delegation system
+export type WorkflowDefinition = typeof workflowDefinitions.$inferSelect;
+export type InsertWorkflowDefinition = typeof workflowDefinitions.$inferInsert;
+export type WorkflowStep = typeof workflowSteps.$inferSelect;
+export type InsertWorkflowStep = typeof workflowSteps.$inferInsert;
+export type NptApproval = typeof nptApprovals.$inferSelect;
+export type InsertNptApproval = typeof nptApprovals.$inferInsert;
+export type Delegation = typeof delegations.$inferSelect;
+export type InsertDelegation = typeof delegations.$inferInsert;
+export type RoleAssignment = typeof roleAssignments.$inferSelect;
+export type InsertRoleAssignment = typeof roleAssignments.$inferInsert;

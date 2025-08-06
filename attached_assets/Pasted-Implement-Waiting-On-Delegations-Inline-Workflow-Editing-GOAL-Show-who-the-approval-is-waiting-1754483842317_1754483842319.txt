@@ -1,0 +1,345 @@
+Implement “Waiting On” + Delegations + Inline Workflow Editing
+GOAL
+Show who the approval is waiting on in Approvals list/details: Waiting on: <User Name> (<Role>).
+
+Allow delegation (out-of-office) so approvals auto-route to a delegate within a date range.
+
+Add inline workflow assignments editor on Approvals page to change approver mappings per role/rig without leaving the page.
+
+0) Shared types/constants
+Create: shared/workflow.ts
+
+ts
+Copy code
+export const NPT_STATUS = {
+  DRAFT: "DRAFT",
+  PENDING_REVIEW: "PENDING_REVIEW",
+  APPROVED: "APPROVED",
+  REJECTED: "REJECTED",
+} as const;
+
+export type NptStatus = typeof NPT_STATUS[keyof typeof NPT_STATUS];
+
+export type ApproverType = "role" | "user";
+1) Database (Prisma; adapt if using another ORM)
+Migration 1 — approval workflow + steps + history
+
+sql
+Copy code
+-- Workflow definitions (scoped per rig; null = global default)
+CREATE TABLE workflow_definitions (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  rig_id INTEGER NULL,
+  is_active BOOLEAN NOT NULL DEFAULT TRUE
+);
+
+CREATE TABLE workflow_steps (
+  id SERIAL PRIMARY KEY,
+  workflow_id INTEGER NOT NULL REFERENCES workflow_definitions(id) ON DELETE CASCADE,
+  step_order INTEGER NOT NULL,
+  approver_type TEXT NOT NULL,         -- 'role' | 'user'
+  role_key TEXT NULL,                  -- when approver_type = 'role' (e.g., 'toolpusher','e_maintenance','ds','osc')
+  user_id INTEGER NULL,                -- when approver_type = 'user'
+  is_required BOOLEAN NOT NULL DEFAULT TRUE
+);
+
+-- Per-report approval trail
+CREATE TABLE npt_approvals (
+  id SERIAL PRIMARY KEY,
+  report_id INTEGER NOT NULL REFERENCES npt_entries(id) ON DELETE CASCADE,
+  step_order INTEGER NOT NULL,
+  approver_user_id INTEGER NOT NULL,
+  action TEXT NOT NULL,                -- 'APPROVE' | 'REJECT' | 'REQUEST_CHANGES'
+  comment TEXT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Current pointer (who we wait on)
+ALTER TABLE npt_entries
+ADD COLUMN current_step_order INTEGER NULL,
+ADD COLUMN current_approver_user_id INTEGER NULL;
+Migration 2 — delegations
+
+sql
+Copy code
+CREATE TABLE delegations (
+  id SERIAL PRIMARY KEY,
+  delegator_user_id INTEGER NOT NULL,
+  delegate_user_id INTEGER NOT NULL,
+  starts_at TIMESTAMPTZ NOT NULL,
+  ends_at TIMESTAMPTZ NOT NULL,
+  rig_id INTEGER NULL,         -- null = all rigs
+  role_key TEXT NULL,          -- null = all roles
+  is_active BOOLEAN NOT NULL DEFAULT TRUE
+);
+2) Server logic
+File: server/lib/approvals.ts
+
+ts
+Copy code
+import { prisma } from "../db";
+
+type User = { id: number, name: string, roleKey?: string };
+
+export async function resolveEffectiveApprovers(opts: {
+  rigId: number,
+  roleKey?: string,
+  explicitUserId?: number,
+  at?: Date
+}) {
+  const now = opts.at ?? new Date();
+
+  // Base approvers from role or explicit user
+  let baseUsers: User[] = [];
+  if (opts.explicitUserId) {
+    const u = await prisma.user.findUnique({ where: { id: opts.explicitUserId }, select: { id: true, name: true }});
+    if (u) baseUsers = [{ id: u.id, name: u.name }];
+  } else if (opts.roleKey) {
+    // mapping table: which users are assigned to this role for this rig
+    const assigns = await prisma.roleAssignment.findMany({
+      where: { rigId: opts.rigId, roleKey: opts.roleKey, isActive: true },
+      select: { user: { select: { id: true, name: true } } }
+    });
+    baseUsers = assigns.map(a => ({ id: a.user.id, name: a.user.name, roleKey: opts.roleKey }));
+  }
+
+  // Apply delegations
+  const ids = baseUsers.map(u => u.id);
+  if (ids.length === 0) return [];
+
+  const dels = await prisma.delegations.findMany({
+    where: {
+      delegator_user_id: { in: ids },
+      is_active: true,
+      starts_at: { lte: now },
+      ends_at: { gte: now },
+      OR: [
+        { rig_id: null }, { rig_id: opts.rigId }
+      ]
+    },
+    select: { delegator_user_id: true, delegate_user_id: true }
+  });
+
+  const delegatedMap = new Map<number, number>();
+  dels.forEach(d => delegatedMap.set(d.delegator_user_id, d.delegate_user_id));
+
+  const effective = baseUsers.map(u => delegatedMap.has(u.id)
+    ? { id: delegatedMap.get(u.id)!, name: `(Delegate)`, roleKey: u.roleKey }
+    : u
+  );
+
+  // remove duplicates
+  return Array.from(new Map(effective.map(u => [u.id, u])).values());
+}
+
+export async function computeNextApprover(reportId: number) {
+  const report = await prisma.npt_entries.findUnique({ where: { id: reportId } });
+  if (!report) return null;
+
+  // pick workflow (rig-scoped else global)
+  const wf = await prisma.workflow_definitions.findFirst({
+    where: { OR: [ { rig_id: report.rig_id }, { rig_id: null } ], is_active: true },
+    orderBy: [{ rig_id: "desc" }]   // prefer rig-specific
+  });
+  if (!wf) return null;
+
+  const steps = await prisma.workflow_steps.findMany({
+    where: { workflow_id: wf.id },
+    orderBy: { step_order: "asc" }
+  });
+
+  const history = await prisma.npt_approvals.findMany({
+    where: { report_id: reportId },
+    select: { step_order: true }
+  });
+  const doneOrders = new Set(history.map(h => h.step_order));
+
+  const next = steps.find(s => s.is_required && !doneOrders.has(s.step_order));
+  if (!next) return null;
+
+  const effective = await resolveEffectiveApprovers({
+    rigId: report.rig_id,
+    roleKey: next.approver_type === "role" ? next.role_key! : undefined,
+    explicitUserId: next.approver_type === "user" ? next.user_id! : undefined
+  });
+
+  // choose first available user (could be extended to queue)
+  const user = effective[0];
+  if (!user) return null;
+
+  await prisma.npt_entries.update({
+    where: { id: reportId },
+    data: { current_step_order: next.step_order, current_approver_user_id: user.id }
+  });
+
+  return { stepOrder: next.step_order, userId: user.id };
+}
+File: server/routes/approvals.ts
+
+ts
+Copy code
+import { Router } from "express";
+import { prisma } from "../db";
+import { NPT_STATUS } from "../../shared/workflow";
+import { computeNextApprover } from "../lib/approvals";
+
+const r = Router();
+
+// After creating/submitting an NPT report, call this to set pointer:
+r.post("/api/npt-reports/:id/route", async (req, res) => {
+  const id = Number(req.params.id);
+  const result = await computeNextApprover(id);
+  return res.json({ routed: !!result, result });
+});
+
+// List with "Waiting on"
+r.get("/api/approvals/list", async (req, res) => {
+  const status = String(req.query.status ?? NPT_STATUS.PENDING_REVIEW);
+
+  const items = await prisma.npt_entries.findMany({
+    where: { status },
+    orderBy: { date: "desc" },
+    select: {
+      id: true, date: true, hours: true, npt_type: true, status: true,
+      rig: { select: { name: true } },
+      current_step_order: true,
+      current_approver_user_id: true,
+      submittedBy: { select: { name: true } }
+    }
+  });
+
+  const userIds = Array.from(new Set(items.map(i => i.current_approver_user_id).filter(Boolean))) as number[];
+  const users = await prisma.user.findMany({
+    where: { id: { in: userIds } },
+    select: { id: true, name: true, roleKey: true }
+  });
+  const map = new Map(users.map(u => [u.id, u]));
+
+  const withWaiting = items.map(i => ({
+    ...i,
+    waitingOn: i.current_approver_user_id ? map.get(i.current_approver_user_id)?.name ?? "—" : "—",
+    waitingOnRole: i.current_approver_user_id ? map.get(i.current_approver_user_id)?.roleKey ?? "" : ""
+  }));
+
+  res.json({ items: withWaiting });
+});
+
+// Approve / Reject
+r.post("/api/approvals/:reportId/approve", async (req, res) => {
+  const reportId = Number(req.params.reportId);
+  const userId = req.user.id;
+
+  const current = await prisma.npt_entries.findUnique({ where: { id: reportId }});
+  if (current?.current_approver_user_id !== userId) {
+    return res.status(403).json({ error: "Not the current approver." });
+  }
+
+  await prisma.npt_approvals.create({
+    data: { report_id: reportId, step_order: current.current_step_order!, approver_user_id: userId, action: "APPROVE", comment: req.body?.comment ?? null }
+  });
+
+  const routed = await computeNextApprover(reportId);
+  if (!routed) {
+    await prisma.npt_entries.update({ where: { id: reportId }, data: { status: NPT_STATUS.APPROVED, current_step_order: null, current_approver_user_id: null }});
+  }
+  res.json({ ok: true });
+});
+
+export default r;
+3) Inline workflow assignments editor (UI)
+Add on Approvals page: a right-side drawer/panel “Workflow & Delegations”:
+
+Section A — Waiting On (read-only): show avatar, name, role.
+
+Section B — Workflow Assignments (editable): table of steps for the selected rig with Role → User select.
+
+Section C — Delegations: form for Out of Office (delegator → delegate, start/end).
+
+File: client/src/pages/approvals/ApprovalsPage.tsx
+
+Add a column “Waiting On”:
+
+tsx
+Copy code
+<Column
+  header="Waiting On"
+  cell={row => (
+    <div className="flex items-center gap-2">
+      <Avatar userId={row.current_approver_user_id} />
+      <div>
+        <div className="font-medium">{row.waitingOn || "—"}</div>
+        <div className="text-xs text-gray-500">{row.waitingOnRole || ""}</div>
+      </div>
+    </div>
+  )}
+/>
+Add an “Edit Workflow” action (button “Workflow”) opening the drawer.
+
+File: client/src/components/approvals/WorkflowDrawer.tsx (new component)
+
+Tabs: Assignments | Delegations
+
+Assignments tab:
+
+Fetch: GET /api/workflow/:rigId/steps
+
+Render rows: Step #, Role, Assigned User <Select> (save per change via PATCH /api/workflow/assign)
+
+Delegations tab:
+
+List active delegations for the rig/user
+
+Create/update with POST /api/delegations / DELETE /api/delegations/:id
+
+Server routes for editor
+
+ts
+Copy code
+// GET steps for a rig
+r.get("/api/workflow/:rigId/steps", async (req,res)=>{ /* return steps + current user assignments */ });
+
+// Update assignment
+r.patch("/api/workflow/assign", async (req,res)=>{
+  // body: { rigId, roleKey, userId }
+  // upsert into roleAssignment table
+});
+
+// Delegations CRUD
+r.get("/api/delegations", async (req,res)=>{ /* list for rig/user */ });
+r.post("/api/delegations", async (req,res)=>{ /* create */ });
+r.delete("/api/delegations/:id", async (req,res)=>{ /* remove */ });
+Permissions
+
+Allow Admin and Rig Managers to edit assignments and delegations.
+
+Others: read-only.
+
+4) UX polish
+In Approvals card counters, add tooltip:
+“Pending Review (Waiting on): the current approver responsible for this step. Open a row to see who.”
+
+In report details, show Approval Timeline: each step with badge Approved/Waiting/Rejected, plus timestamps from npt_approvals.
+
+5) Tests (manual)
+As Manager, open Approvals → see Waiting On names populated.
+
+Create a delegation from “Haitham Supervisor” to “John” for Rig 104 (today → +7 days).
+
+Submit a report → “Waiting On” should display John (Delegate).
+
+In Workflow drawer, change Toolpusher assignment to another user → “Waiting On” should update after reroute.
+
+Approve as the waiting user → pointer moves to next step; when no steps left, status becomes APPROVED.
+
+✅ Acceptance Criteria
+Approvals list shows Waiting on: Name (Role).
+
+Workflow assignments can be edited inline per rig on the Approvals page.
+
+Delegations (date-bounded) reroute approvals automatically.
+
+Permissions enforced (Admin & Rig Managers can edit; others read-only).
+
+Approval timeline visible on report details.
+
