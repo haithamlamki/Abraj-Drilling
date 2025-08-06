@@ -1551,9 +1551,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 function validateNptReport(data: any, user: any): string[] {
   const errors: string[] = [];
   
-  // Hours validation
-  if (data.hours <= 0 || data.hours > 24) {
-    errors.push("Hours must be between 0.1 and 24");
+  // Hours validation - allow 0 hours as valid
+  if (data.hours < 0 || data.hours > 24) {
+    errors.push("Hours must be between 0 and 24");
   }
   
   // NPT Type specific validations
