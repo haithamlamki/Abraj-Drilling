@@ -366,7 +366,7 @@ export const insertNptReportSchema = createInsertSchema(nptReports).omit({
   updatedAt: true,
 }).extend({
   date: z.string().transform((val) => new Date(val)),
-  hours: z.number().positive(),
+  hours: z.number().min(0).max(24),
 });
 
 export const insertRigSchema = createInsertSchema(rigs).omit({
