@@ -35,12 +35,14 @@ export function getSession() {
     secret: process.env.SESSION_SECRET!,
     store: sessionStore,
     resave: false,
-    saveUninitialized: false,
+    saveUninitialized: true, // Changed to true to ensure session creation
     cookie: {
       httpOnly: true,
-      secure: true,
+      secure: false, // Set to false for local development
       maxAge: sessionTtl,
+      sameSite: 'lax', // Add sameSite for better cookie handling
     },
+    name: 'sessionId', // Give the session a specific name
   });
 }
 
@@ -128,9 +130,21 @@ export async function setupAuth(app: Express) {
 }
 
 export const isAuthenticated: RequestHandler = async (req, res, next) => {
-  const user = req.user as any;
+  // Check for custom login session first (both locations)
+  const sessionUser = (req.session as any)?.user || (req.session as any)?.passport?.user;
+  
+  if (sessionUser && sessionUser.claims && sessionUser.expires_at) {
+    const now = Math.floor(Date.now() / 1000);
+    if (now <= sessionUser.expires_at) {
+      // Set req.user for compatibility with existing code
+      req.user = sessionUser;
+      return next();
+    }
+  }
 
-  if (!req.isAuthenticated() || !user.expires_at) {
+  // Fallback to original Replit Auth logic
+  const user = req.user as any;
+  if (!req.isAuthenticated() || !user?.expires_at) {
     return res.status(401).json({ message: "Unauthorized" });
   }
 

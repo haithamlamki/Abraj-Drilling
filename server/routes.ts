@@ -47,23 +47,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await storage.updateUserPassword(user.id, password);
       }
 
-      // Create a session-like response
+      // Create a session-like response compatible with existing auth
       req.session = req.session || {};
-      (req.session as any).user = {
+      
+      // Store in both user and passport.user for compatibility
+      const sessionData = {
         claims: { sub: user.id },
         access_token: 'demo_token',
         expires_at: Math.floor(Date.now() / 1000) + 3600 // 1 hour
       };
+      
+      (req.session as any).user = sessionData;
+      (req.session as any).passport = { user: sessionData };
 
-      res.json({ 
-        success: true, 
-        user: {
-          id: user.id,
-          email: user.email,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          role: user.role
+      // Save the session explicitly
+      req.session.save((err) => {
+        if (err) {
+          console.error('Session save error:', err);
+          return res.status(500).json({ message: "Session save failed" });
         }
+        
+        res.json({ 
+          success: true, 
+          user: {
+            id: user.id,
+            email: user.email,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            role: user.role
+          }
+        });
       });
     } catch (error) {
       console.error("Login error:", error);

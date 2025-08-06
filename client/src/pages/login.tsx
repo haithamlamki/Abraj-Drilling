@@ -45,8 +45,8 @@ export default function Login() {
         title: "Success",
         description: "Logged in successfully",
       });
-      // Redirect to dashboard or intended page
-      setLocation("/");
+      // Force refresh the page to trigger auth state update
+      window.location.href = "/";
     },
     onError: (error: Error) => {
       setLoginError(error.message || "Login failed. Please check your credentials.");
