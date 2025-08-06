@@ -21,6 +21,7 @@ import type { System, Equipment, Department, ActionParty, InsertNptReport, Rig }
 import type { BillingSheetRow } from "@shared/billingTypes";
 import QuarterHourField from "@/components/QuarterHourField";
 import { isQuarter } from "@/lib/time";
+import { NPT_STATUS } from "@shared/status";
 
 // Schema for drafts - minimal validation with quarter-hour validation
 const draftFormSchema = insertNptReportSchema.extend({
@@ -301,14 +302,14 @@ export default function NptForm() {
         await apiRequest('PUT', `/api/npt-reports/${editId}`, {
           ...data,
           date: new Date(data.date).toISOString(),
-          status: "Pending Review",
+          status: NPT_STATUS.PENDING_REVIEW,
         });
       } else {
         // Create new report
         await apiRequest('POST', '/api/npt-reports', {
           ...data,
           date: new Date(data.date).toISOString(),
-          status: "Pending Review",
+          status: NPT_STATUS.PENDING_REVIEW,
         });
       }
     },

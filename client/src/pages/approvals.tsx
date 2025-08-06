@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CheckCircle, XCircle, Clock, Eye, MessageSquare, Filter } from "lucide-react";
 import type { NptReport, Rig, System } from "@shared/schema";
+import { NPT_STATUS } from "@shared/status";
 
 export default function ApprovalsPage() {
   const { toast } = useToast();
@@ -54,11 +55,11 @@ export default function ApprovalsPage() {
     enabled: isAuthenticated 
   });
 
-  // Filter reports by status
-  const pendingReports = reports.filter(r => r.status === 'pending');
-  const approvedReports = reports.filter(r => r.status === 'approved');
-  const rejectedReports = reports.filter(r => r.status === 'rejected');
-  const draftReports = reports.filter(r => r.status === 'draft');
+  // Filter reports by status using consistent status constants
+  const pendingReports = reports.filter(r => r.status === NPT_STATUS.PENDING_REVIEW);
+  const approvedReports = reports.filter(r => r.status === NPT_STATUS.APPROVED);
+  const rejectedReports = reports.filter(r => r.status === NPT_STATUS.REJECTED);
+  const draftReports = reports.filter(r => r.status === NPT_STATUS.DRAFT);
 
   // Approval mutations
   const approveReportMutation = useMutation({

@@ -13,6 +13,7 @@ import { processPDFBilling, enhanceBillingRowWithNPTData } from "./pdfProcessor"
 import { workflowService } from "./workflowService";
 import { lifecycleService } from "./lifecycleService";
 import { serverNptReportSchema, insertRigSchema, insertSystemSchema, insertEquipmentSchema, insertDepartmentSchema, insertActionPartySchema, insertReportDeliverySchema, insertAlertRuleSchema } from "@shared/schema";
+import { NPT_STATUS } from "@shared/status";
 import type { BillingSheetRow } from "@shared/billingTypes";
 import { z } from "zod";
 import multer from "multer";
@@ -1178,12 +1179,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "You can only submit your own reports" });
       }
 
-      if (report.status !== 'draft') {
+      if (report.status !== NPT_STATUS.DRAFT) {
         return res.status(400).json({ message: "Only draft reports can be submitted for approval" });
       }
 
       await storage.updateNptReport(reportId, {
-        status: 'Pending Review'
+        status: NPT_STATUS.PENDING_REVIEW
       });
 
       res.json({ message: "Report submitted for approval successfully" });

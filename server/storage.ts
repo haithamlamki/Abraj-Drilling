@@ -49,6 +49,7 @@ import {
 import type { BillingSheetUpload, BillingUploadResult } from "@shared/billingTypes";
 import { db } from "./db";
 import { eq, desc, and, or, count } from "drizzle-orm";
+import { NPT_STATUS } from "@shared/status";
 
 export interface IStorage {
   // User operations (Required for Replit Auth)
@@ -311,8 +312,8 @@ export class DatabaseStorage implements IStorage {
       .from(nptReports)
       .where(
         conditions.length > 0 
-          ? and(...conditions, eq(nptReports.status, 'Pending Review'))
-          : eq(nptReports.status, 'Pending Review')
+          ? and(...conditions, eq(nptReports.status, NPT_STATUS.PENDING_REVIEW))
+          : eq(nptReports.status, NPT_STATUS.PENDING_REVIEW)
       );
     
     const [approvedResult] = await db

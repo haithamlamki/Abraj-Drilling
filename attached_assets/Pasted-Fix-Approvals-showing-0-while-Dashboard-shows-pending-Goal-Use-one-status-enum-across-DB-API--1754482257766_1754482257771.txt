@@ -1,0 +1,204 @@
+Fix Approvals showing “0” (while Dashboard shows pending)
+Goal
+
+Use one status enum across DB / API / UI.
+
+Approvals list & counters should include all NPT reports in user’s rig scope with PENDING_REVIEW.
+
+Admin sees all rigs; others see their assigned rigs.
+
+1) Create shared status constants
+File: shared/status.ts
+
+ts
+Copy code
+export const NPT_STATUS = {
+  DRAFT: "DRAFT",
+  PENDING_REVIEW: "PENDING_REVIEW",
+  APPROVED: "APPROVED",
+  REJECTED: "REJECTED",
+} as const;
+
+export type NptStatus = typeof NPT_STATUS[keyof typeof NPT_STATUS];
+Search & replace everywhere status strings are used and switch to these constants:
+
+Replace "Pending Review", "pending", "Submitted", etc. → NPT_STATUS.PENDING_REVIEW
+
+Replace "Draft" → NPT_STATUS.DRAFT
+
+Replace "Approved" → NPT_STATUS.APPROVED
+
+Replace "Rejected" → NPT_STATUS.REJECTED
+
+2) Ensure create/submit sets the right status
+File: server handler that creates/updates NPT (e.g., server/routes/npt.ts)
+
+On Save as Draft → status = NPT_STATUS.DRAFT
+
+On Submit for Review → status = NPT_STATUS.PENDING_REVIEW
+
+ts
+Copy code
+import { NPT_STATUS } from "../../shared/status";
+
+// example on submit
+const status = body.submit ? NPT_STATUS.PENDING_REVIEW : NPT_STATUS.DRAFT;
+3) Add a helper to compute the user’s rig scope
+File: server/lib/scope.ts
+
+ts
+Copy code
+import { prisma } from "../db"; // adjust import
+
+export async function getUserRigScope(userId: number, role: string) {
+  if (role === "admin") return "ALL"; // admin sees all rigs
+
+  // If you already store assigned rig IDs in a pivot table, use that:
+  const assignments = await prisma.userRigAssignment.findMany({
+    where: { userId },
+    select: { rigId: true },
+  });
+  const rigIds = assignments.map(a => a.rigId);
+
+  // Fallback: if role like "supervisor" or "manager" flagged “All Rigs”, handle it here.
+  if (rigIds.length === 0) return []; // no rigs assigned → nothing to show
+  return rigIds;
+}
+4) Approvals API: summary + list filtered by scope
+File: server/routes/approvals.ts (create if missing)
+
+ts
+Copy code
+import { Router } from "express";
+import { prisma } from "../db";
+import { getUserRigScope } from "../lib/scope";
+import { NPT_STATUS } from "../../shared/status";
+
+const router = Router();
+
+router.get("/api/approvals/summary", async (req, res) => {
+  const { id: userId, role } = req.user; // adjust to your auth
+  const scope = await getUserRigScope(userId, role);
+
+  const whereBase: any = {};
+  if (scope !== "ALL") whereBase.rigId = { in: scope };
+
+  const statuses = [NPT_STATUS.PENDING_REVIEW, NPT_STATUS.APPROVED, NPT_STATUS.REJECTED, NPT_STATUS.DRAFT];
+
+  const counts = Object.fromEntries(await Promise.all(
+    statuses.map(async (s) => {
+      const c = await prisma.nptReport.count({ where: { ...whereBase, status: s } });
+      return [s, c];
+    })
+  ));
+
+  res.json({ counts });
+});
+
+router.get("/api/approvals/list", async (req, res) => {
+  const { id: userId, role } = req.user;
+  const scope = await getUserRigScope(userId, role);
+
+  const status = String(req.query.status ?? NPT_STATUS.PENDING_REVIEW);
+  const page = Number(req.query.page ?? 1);
+  const pageSize = Number(req.query.pageSize ?? 50);
+
+  const where: any = { status };
+  if (scope !== "ALL") where.rigId = { in: scope };
+
+  const [items, total] = await Promise.all([
+    prisma.nptReport.findMany({
+      where,
+      orderBy: { date: "desc" },
+      take: pageSize,
+      skip: (page - 1) * pageSize,
+      select: {
+        id: true, date: true, hours: true, nptType: true, status: true,
+        rig: { select: { name: true } },
+        submittedBy: { select: { name: true, email: true } },
+        system: true,
+      }
+    }),
+    prisma.nptReport.count({ where })
+  ]);
+
+  res.json({ items, total, page, pageSize });
+});
+
+export default router;
+Wire the router in your server entry (e.g., server/index.ts):
+
+ts
+Copy code
+import approvalsRouter from "./routes/approvals";
+app.use(approvalsRouter);
+5) Frontend: Approvals page should call the new endpoints
+File: client/src/pages/approvals/ApprovalsPage.tsx (or similar)
+
+Fetch summary for the header counters:
+
+ts
+Copy code
+const { data: summary } = useSWR("/api/approvals/summary", fetcher);
+// Bind:
+// summary.counts.PENDING_REVIEW
+// summary.counts.APPROVED
+// summary.counts.REJECTED
+// summary.counts.DRAFT
+Fetch list for the active tab:
+
+ts
+Copy code
+const [status, setStatus] = useState(NPT_STATUS.PENDING_REVIEW);
+const { data: list } = useSWR(`/api/approvals/list?status=${status}`, fetcher);
+Render table from list.items (date, rig, nptType, hours, system, status, submittedBy).
+
+Ensure the tab labels show the counts (0/0/0/0 → correct numbers).
+
+If the UI previously filtered by reviewerId or a mismatched status string (“Pending Review” vs PENDING_REVIEW), remove that filter and rely on the scope + status above.
+
+6) Dashboard “Pending Review” widget — align to the same status
+File: client/src/pages/dashboard/Dashboard.tsx
+Ensure its count query uses status = PENDING_REVIEW and the same scope logic, so Dashboard and Approvals match.
+
+7) Data backfill (optional)
+If existing rows store status as free text:
+
+Write a one-time script/migration to normalize values:
+
+"Pending Review", "pending", "Submitted" → PENDING_REVIEW
+
+"Draft" → DRAFT, etc.
+
+8) How to test (step-by-step)
+Login as a regular user with assigned rigs (e.g., Supervisor – Rig 2).
+
+Create NPT report on one of those rigs and click Submit for Review.
+
+Record’s status should be PENDING_REVIEW.
+
+Go to Dashboard → “Pending Review” shows 1 (or more).
+
+Go to Approvals:
+
+Header counters show the same counts as Dashboard.
+
+Pending tab lists your newly submitted record.
+
+Login as Admin (no rigs assigned):
+
+Approvals should list all PENDING_REVIEW across all rigs.
+
+Change a record to Approved/Rejected and confirm counters & tabs update.
+
+9) Acceptance criteria
+Approvals header counters match Dashboard.
+
+Pending tab lists all pending items within the user’s rig scope.
+
+Admin sees all rigs.
+
+No more 0/empty list while Dashboard shows pending.
+
+Status strings are consistent everywhere (NPT_STATUS.*).
+
