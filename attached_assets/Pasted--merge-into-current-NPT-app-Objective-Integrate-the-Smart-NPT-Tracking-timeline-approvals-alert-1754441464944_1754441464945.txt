@@ -1,0 +1,134 @@
+ (merge into current NPT app)
+Objective
+Integrate the Smart NPT Tracking (timeline, approvals, alerts, dashboard) directly into the existing Monthly NPT Reporting module. Keep one codebase, one DB, one UI. Do not create a separate app.
+
+1) Data model (reuse + extend)
+Reuse current monthly NPT tables. Add/extend fields on the monthly report entity:
+
+status: Draft|Submitted|In_Review|Approved|Rejected
+
+sla_days:int (default 5)
+
+total_hours:numeric (roll-up from existing daily rows)
+
+Create the minimal supporting tables (if not present):
+
+stage_events(report_id, stage, by_user, at, comment)
+
+day_slices(report_id, day, status, note)
+
+report_deliveries(report_id, start_date, end_date, delivered_at, delivered_by)
+
+notifications(report_id, rule_code, recipient, channel, payload, sent_at)
+
+alert_rules(code, threshold_hours, enabled)
+
+Backfill migration: for each (rig, year, month) with existing data, create or link a monthly report row; default status='Draft'; compute total_hours.
+
+2) One unified workflow (no duplicate flows)
+States: Draft → Submitted → In_Review → Approved|Rejected (Rejected → Draft).
+
+Every state change writes a stage_events row (immutable audit).
+
+On state change, update status, updated_at, and refresh day_slices.
+
+3) Single navigation & UI (merge into current screens)
+NPT Monthly Dashboard (existing page):
+
+Add columns: Status, Progress, Next Owner, SLA badge (on-time/over), Last Update.
+
+Action buttons inline: Submit, Approve, Reject (requires comment).
+
+Report Details (existing page):
+
+Add tabs:
+
+Timeline: days 1..31 with color states (Draft=gray, Submitted=blue, In_Review=yellow, Approved=green; Late=red border). Overlay delivered window (e.g., days 1–15).
+
+Audit: table of stage_events.
+
+Summary: totals by NPT type + link to daily NPT grid (existing).
+
+Dashboard (existing analytics page):
+
+Add Today Queue (reports needing your action), Gantt, Status Heatmap, and KPIs: Total Reports, Total NPT Hours, % Approved On-Time, Avg Review Time, Over-SLA Count.
+
+Keep current design system/colors; extend only.
+
+4) API (extend, don’t duplicate)
+Extend current endpoints; add only what’s missing:
+
+PATCH /reports/:id/state {to, comment?}
+
+GET /reports/:id/timeline
+
+POST /reports/:id/delivery {start_date,end_date}
+
+GET /reports/:id/audit
+
+POST /alerts/run (cron-safe)
+
+GET /kpi?rig&year&month
+
+Backward compatible: existing consumers remain unaffected.
+
+5) Alerts & notifications (configurable)
+Rules (store in alert_rules):
+
+PENDING_APPROVAL: In_Review > 48h → notify approver.
+
+OVER_SLA: (Approved − Created) > sla_days → notify owner + manager.
+
+MISSING_DAY: expected workday with No_Entry by 18:00 → notify owner.
+
+STALLED: not Approved and no activity in 24h → notify owner.
+
+Channels: in-app + email. Respect user preferences if available.
+
+6) Permissions (map to existing roles)
+Editor/Owner: enter & submit.
+
+Reviewer: move to In_Review.
+
+Approver: approve/reject.
+
+Admin: manage SLA, alert rules, recipients.
+
+7) Data integrity & quality
+Comment required on Reject.
+
+Every state change = exactly one stage_events row.
+
+day_slices precedence per day: Approved > In_Review > Submitted > Draft > No_Entry; mark Late if cycle time exceeds sla_days.
+
+8) Migration & fallback
+Migration script to:
+
+Create/link monthly report rows.
+
+Seed day_slices from historical events (best-effort: mark days with entries as Draft if no stage history).
+
+Feature flag the new UI blocks; allow rollback by toggling flag (no schema rollback needed).
+
+9) Exports
+Export CSV/XLSX for reports + stage_events + day_slices.
+
+Monthly PDF summary: KPIs + heatmap + list of late/over-SLA reports.
+
+10) Acceptance criteria
+State transitions persist correctly, audit trail complete.
+
+Timeline colors match daily states; delivered window visible.
+
+Alerts fire and appear both in-app and email; rules are editable.
+
+KPIs match raw data; exports open and match dashboard numbers.
+
+Existing NPT entry flows untouched; users work in one module.
+
+11) Non-goals / constraints
+Do not spin a new repo/app.
+
+Do not duplicate NPT data; reuse existing tables and UI routes.
+
+Zero downtime during migration.

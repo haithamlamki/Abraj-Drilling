@@ -6,7 +6,7 @@ import { BillingProcessor } from "./billingProcessor";
 import { processPDFBilling, enhanceBillingRowWithNPTData } from "./pdfProcessor";
 import { workflowService } from "./workflowService";
 import { lifecycleService } from "./lifecycleService";
-import { insertNptReportSchema, insertSystemSchema, insertEquipmentSchema, insertDepartmentSchema, insertActionPartySchema } from "@shared/schema";
+import { insertNptReportSchema, insertRigSchema, insertSystemSchema, insertEquipmentSchema, insertDepartmentSchema, insertActionPartySchema, insertReportDeliverySchema, insertAlertRuleSchema } from "@shared/schema";
 import type { BillingSheetRow } from "@shared/billingTypes";
 import { z } from "zod";
 import multer from "multer";
@@ -588,7 +588,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         try {
           // Map the Excel columns to our rig data structure
           const rigData = {
-            rigNumber: String(row['Rig Number'] || row['RigNumber'] || row['Rig'] || '').trim(),
+            rigNumber: parseInt(String(row['Rig Number'] || row['RigNumber'] || row['Rig'] || '').trim()),
             section: String(row['Section'] || row['Unit'] || 'KOC').trim(),
             client: String(row['Client'] || row['Company'] || 'Kuwait Oil Company').trim(),
             location: String(row['Location'] || row['Field'] || '').trim(),
@@ -602,7 +602,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
 
           // Check if rig already exists
-          const existingRig = await storage.getRigByNumber(parseInt(rigData.rigNumber));
+          const existingRig = await storage.getRigByNumber(rigData.rigNumber);
           if (existingRig) {
             // Update existing rig
             await storage.updateRig(existingRig.id, rigData);
@@ -896,7 +896,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Only Tool Pushers can initiate workflow" });
       }
 
-      await workflowService.initiateWorkflow(reportId, userId);
+      // Initialize workflow through lifecycle service
+      await lifecycleService.initializeWorkflow(reportId);
       res.json({ message: "Workflow initiated successfully" });
     } catch (error) {
       console.error("Error initiating workflow:", error);
@@ -920,13 +921,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Report not found" });
       }
 
-      // Check if user can perform action
-      const canPerform = await workflowService.canUserPerformAction(report, user.role || '');
+      // Check if user can perform action based on report status and user role
+      const canPerform = ['tool_pusher', 'drilling_superintendent', 'operations_superintendent'].includes(user.role || '');
       if (!canPerform) {
         return res.status(403).json({ message: "You cannot perform actions on this report at this stage" });
       }
 
-      await workflowService.processWorkflowAction(
+      // Process workflow action through lifecycle service
+      await lifecycleService.processWorkflowAction(
         reportId,
         userId,
         user.role || '',
@@ -1239,6 +1241,145 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error marking all notifications as read:", error);
       res.status(500).json({ message: "Failed to mark all notifications as read" });
+    }
+  });
+
+  // Smart NPT Tracking - Report Deliveries Endpoints
+  app.get('/api/report-deliveries', isAuthenticated, async (req: any, res) => {
+    try {
+      const reportId = req.query.reportId ? parseInt(req.query.reportId as string) : undefined;
+      const deliveries = await storage.getReportDeliveries(reportId);
+      res.json(deliveries);
+    } catch (error) {
+      console.error("Error fetching report deliveries:", error);
+      res.status(500).json({ message: "Failed to fetch report deliveries" });
+    }
+  });
+
+  app.post('/api/report-deliveries', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (!user || !['admin', 'supervisor'].includes(user.role || '')) {
+        return res.status(403).json({ message: "Insufficient permissions" });
+      }
+      
+      const validatedData = insertReportDeliverySchema.parse(req.body);
+      const delivery = await storage.createReportDelivery(validatedData);
+      res.status(201).json(delivery);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Validation failed", errors: error.errors });
+      }
+      console.error("Error creating report delivery:", error);
+      res.status(500).json({ message: "Failed to create report delivery" });
+    }
+  });
+
+  app.patch('/api/report-deliveries/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (!user || !['admin', 'supervisor'].includes(user.role || '')) {
+        return res.status(403).json({ message: "Insufficient permissions" });
+      }
+      
+      const updatedDelivery = await storage.updateReportDelivery(parseInt(id), req.body);
+      res.json(updatedDelivery);
+    } catch (error) {
+      console.error("Error updating report delivery:", error);
+      res.status(500).json({ message: "Failed to update report delivery" });
+    }
+  });
+
+  // Smart NPT Tracking - Alert Rules Endpoints
+  app.get('/api/alert-rules', isAuthenticated, async (req: any, res) => {
+    try {
+      const rules = await storage.getAlertRules();
+      res.json(rules);
+    } catch (error) {
+      console.error("Error fetching alert rules:", error);
+      res.status(500).json({ message: "Failed to fetch alert rules" });
+    }
+  });
+
+  app.post('/api/alert-rules', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Only admins can create alert rules" });
+      }
+      
+      const validatedData = insertAlertRuleSchema.parse(req.body);
+      const rule = await storage.createAlertRule(validatedData);
+      res.status(201).json(rule);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Validation failed", errors: error.errors });
+      }
+      console.error("Error creating alert rule:", error);
+      res.status(500).json({ message: "Failed to create alert rule" });
+    }
+  });
+
+  app.patch('/api/alert-rules/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Only admins can update alert rules" });
+      }
+      
+      const updatedRule = await storage.updateAlertRule(parseInt(id), req.body);
+      res.json(updatedRule);
+    } catch (error) {
+      console.error("Error updating alert rule:", error);
+      res.status(500).json({ message: "Failed to update alert rule" });
+    }
+  });
+
+  app.delete('/api/alert-rules/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Only admins can delete alert rules" });
+      }
+      
+      await storage.deleteAlertRule(parseInt(id));
+      res.json({ message: "Alert rule deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting alert rule:", error);
+      res.status(500).json({ message: "Failed to delete alert rule" });
+    }
+  });
+
+  // Today's queue endpoint for Smart NPT Tracking dashboard
+  app.get('/api/todays-queue', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (!user) {
+        return res.status(401).json({ message: "User not found" });
+      }
+      
+      const today = new Date();
+      const todayQueue = await lifecycleService.getTodaysQueue(user.role || '', today);
+      
+      res.json(todayQueue);
+    } catch (error) {
+      console.error("Error fetching today's queue:", error);
+      res.status(500).json({ message: "Failed to fetch today's queue" });
     }
   });
 

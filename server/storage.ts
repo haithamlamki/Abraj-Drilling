@@ -13,6 +13,8 @@ import {
   daySlices,
   notifications,
   slaRules,
+  reportDeliveries,
+  alertRules,
   type User,
   type UpsertUser,
   type Rig,
@@ -39,6 +41,10 @@ import {
   type InsertNotification,
   type SlaRule,
   type InsertSlaRule,
+  type ReportDelivery,
+  type InsertReportDelivery,
+  type AlertRule,
+  type InsertAlertRule,
 } from "@shared/schema";
 import type { BillingSheetUpload, BillingUploadResult } from "@shared/billingTypes";
 import { db } from "./db";
@@ -103,6 +109,17 @@ export interface IStorage {
   getBillingUploads(): Promise<any[]>;
   getRigByNumber(rigNumber: number): Promise<Rig | undefined>;
   getSystemByName(name: string): Promise<System | undefined>;
+  
+  // Smart NPT Tracking - Report Deliveries
+  createReportDelivery(delivery: InsertReportDelivery): Promise<ReportDelivery>;
+  getReportDeliveries(reportId?: number): Promise<ReportDelivery[]>;
+  updateReportDelivery(id: number, updates: Partial<ReportDelivery>): Promise<ReportDelivery>;
+  
+  // Smart NPT Tracking - Alert Rules
+  getAlertRules(): Promise<AlertRule[]>;
+  createAlertRule(rule: InsertAlertRule): Promise<AlertRule>;
+  updateAlertRule(id: number, updates: Partial<AlertRule>): Promise<AlertRule>;
+  deleteAlertRule(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -592,6 +609,45 @@ export class DatabaseStorage implements IStorage {
   async getSystemByName(name: string): Promise<System | undefined> {
     const [system] = await db.select().from(systems).where(eq(systems.name, name));
     return system;
+  }
+  
+  // Smart NPT Tracking - Report Deliveries
+  async createReportDelivery(delivery: InsertReportDelivery): Promise<ReportDelivery> {
+    const [newDelivery] = await db.insert(reportDeliveries).values(delivery).returning();
+    return newDelivery;
+  }
+  
+  async getReportDeliveries(reportId?: number): Promise<ReportDelivery[]> {
+    if (reportId) {
+      return await db.select().from(reportDeliveries).where(eq(reportDeliveries.reportId, reportId));
+    }
+    return await db.select().from(reportDeliveries);
+  }
+  
+  async updateReportDelivery(id: number, updates: Partial<ReportDelivery>): Promise<ReportDelivery> {
+    const [updated] = await db.update(reportDeliveries).set(updates).where(eq(reportDeliveries.id, id)).returning();
+    if (!updated) throw new Error('Report delivery not found');
+    return updated;
+  }
+  
+  // Smart NPT Tracking - Alert Rules
+  async getAlertRules(): Promise<AlertRule[]> {
+    return await db.select().from(alertRules).orderBy(alertRules.createdAt);
+  }
+  
+  async createAlertRule(rule: InsertAlertRule): Promise<AlertRule> {
+    const [newRule] = await db.insert(alertRules).values(rule).returning();
+    return newRule;
+  }
+  
+  async updateAlertRule(id: number, updates: Partial<AlertRule>): Promise<AlertRule> {
+    const [updated] = await db.update(alertRules).set(updates).where(eq(alertRules.id, id)).returning();
+    if (!updated) throw new Error('Alert rule not found');
+    return updated;
+  }
+  
+  async deleteAlertRule(id: number): Promise<void> {
+    await db.delete(alertRules).where(eq(alertRules.id, id));
   }
 }
 

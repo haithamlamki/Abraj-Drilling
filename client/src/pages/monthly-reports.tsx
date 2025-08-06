@@ -97,10 +97,7 @@ export default function MonthlyReports() {
   // Mutations for report actions
   const submitMutation = useMutation({
     mutationFn: ({ reportId, comments }: { reportId: number; comments?: string }) =>
-      apiRequest(`/api/monthly-reports/${reportId}/submit`, {
-        method: 'POST',
-        body: JSON.stringify({ comments })
-      }),
+      apiRequest('POST', `/api/monthly-reports/${reportId}/submit`, { comments }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/monthly-reports'] });
       toast({ title: "Success", description: "Report submitted successfully" });
@@ -110,10 +107,7 @@ export default function MonthlyReports() {
 
   const approveMutation = useMutation({
     mutationFn: ({ reportId, comments }: { reportId: number; comments?: string }) =>
-      apiRequest(`/api/monthly-reports/${reportId}/approve`, {
-        method: 'POST',
-        body: JSON.stringify({ comments })
-      }),
+      apiRequest('POST', `/api/monthly-reports/${reportId}/approve`, { comments }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/monthly-reports'] });
       toast({ title: "Success", description: "Report approved successfully" });
@@ -123,10 +117,7 @@ export default function MonthlyReports() {
 
   const rejectMutation = useMutation({
     mutationFn: ({ reportId, reason }: { reportId: number; reason: string }) =>
-      apiRequest(`/api/monthly-reports/${reportId}/reject`, {
-        method: 'POST',
-        body: JSON.stringify({ reason })
-      }),
+      apiRequest('POST', `/api/monthly-reports/${reportId}/reject`, { reason }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/monthly-reports'] });
       toast({ title: "Success", description: "Report rejected" });
@@ -136,10 +127,7 @@ export default function MonthlyReports() {
 
   const resubmitMutation = useMutation({
     mutationFn: ({ reportId, comments }: { reportId: number; comments?: string }) =>
-      apiRequest(`/api/monthly-reports/${reportId}/resubmit`, {
-        method: 'POST',
-        body: JSON.stringify({ comments })
-      }),
+      apiRequest('POST', `/api/monthly-reports/${reportId}/resubmit`, { comments }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/monthly-reports'] });
       toast({ title: "Success", description: "Report resubmitted successfully" });

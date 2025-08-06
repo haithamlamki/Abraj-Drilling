@@ -10,6 +10,7 @@ import {
   jsonb,
   index,
   serial,
+  date,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
@@ -184,7 +185,36 @@ export const notifications = pgTable("notifications", {
   index("idx_notifications_sent").on(table.sentAt),
 ]);
 
-// SLA Configuration
+// Report Deliveries - Track delivery windows
+export const reportDeliveries = pgTable("report_deliveries", {
+  id: serial("id").primaryKey(),
+  reportId: integer("report_id").references(() => monthlyReports.id).notNull(),
+  startDate: date("start_date").notNull(),
+  endDate: date("end_date").notNull(),
+  deliveredAt: timestamp("delivered_at"),
+  deliveredBy: varchar("delivered_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_deliveries_report").on(table.reportId),
+  index("idx_deliveries_dates").on(table.startDate, table.endDate),
+]);
+
+// Alert Rules - Configurable alert conditions
+export const alertRules = pgTable("alert_rules", {
+  id: serial("id").primaryKey(),
+  code: varchar("code").unique().notNull(), // PENDING_APPROVAL, OVER_SLA, MISSING_DAY, STALLED
+  description: text("description").notNull(),
+  thresholdHours: integer("threshold_hours").notNull(),
+  enabled: boolean("enabled").default(true),
+  recipients: jsonb("recipients"), // Array of user IDs or roles
+  emailTemplate: text("email_template"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_alert_rules_enabled").on(table.enabled),
+]);
+
+// SLA Configuration (keeping existing for compatibility)
 export const slaRules = pgTable("sla_rules", {
   id: serial("id").primaryKey(),
   ruleName: varchar("rule_name").notNull(),
@@ -275,6 +305,7 @@ export const monthlyReportRelations = relations(monthlyReports, ({ one, many }) 
   stageEvents: many(stageEvents),
   daySlices: many(daySlices),
   notifications: many(notifications),
+  deliveries: many(reportDeliveries),
 }));
 
 export const stageEventRelations = relations(stageEvents, ({ one }) => ({
@@ -306,6 +337,17 @@ export const notificationRelations = relations(notifications, ({ one }) => ({
   }),
   recipientUser: one(users, {
     fields: [notifications.recipient],
+    references: [users.id],
+  }),
+}));
+
+export const reportDeliveryRelations = relations(reportDeliveries, ({ one }) => ({
+  report: one(monthlyReports, {
+    fields: [reportDeliveries.reportId],
+    references: [monthlyReports.id],
+  }),
+  deliveredByUser: one(users, {
+    fields: [reportDeliveries.deliveredBy],
     references: [users.id],
   }),
 }));
@@ -374,6 +416,17 @@ export const insertSlaRuleSchema = createInsertSchema(slaRules).omit({
   updatedAt: true,
 });
 
+export const insertReportDeliverySchema = createInsertSchema(reportDeliveries).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertAlertRuleSchema = createInsertSchema(alertRules).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Types
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
@@ -404,5 +457,7 @@ export type Notification = typeof notifications.$inferSelect;
 export type InsertNotification = z.infer<typeof insertNotificationSchema>;
 export type SlaRule = typeof slaRules.$inferSelect;
 export type InsertSlaRule = z.infer<typeof insertSlaRuleSchema>;
-export type ActionParty = typeof actionParties.$inferSelect;
-export type InsertActionParty = z.infer<typeof insertActionPartySchema>;
+export type ReportDelivery = typeof reportDeliveries.$inferSelect;
+export type InsertReportDelivery = z.infer<typeof insertReportDeliverySchema>;
+export type AlertRule = typeof alertRules.$inferSelect;
+export type InsertAlertRule = z.infer<typeof insertAlertRuleSchema>;

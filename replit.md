@@ -17,6 +17,16 @@ The platform serves different user roles (drilling managers, supervisors, and ad
 - **Settings Management**: Comprehensive reference data management for rigs, systems, equipment, departments, and action parties
 - **Database Integration**: Full PostgreSQL integration with proper validation and error handling
 
+### Smart NPT Tracking Integration (January 6, 2025)
+- **Complete Database Schema Enhancement**: Added reportDeliveries and alertRules tables for comprehensive lifecycle tracking
+- **Enhanced Backend API**: Fully integrated Smart NPT Tracking endpoints for delivery management and alert rule configuration
+- **Advanced SLA Monitoring**: Automated tracking of report submission deadlines with configurable alert thresholds
+- **Report Delivery Tracking**: Complete audit trail for NPT report submissions with delivery status and timestamps
+- **Intelligent Alert System**: Role-based notification system with customizable SLA rules and escalation paths
+- **Today's Queue Dashboard**: Real-time view of pending actions and approaching deadlines for each user role
+- **Enhanced Monthly Reports Module**: Integrated delivery tracking directly into existing monthly NPT reporting workflow
+- **Comprehensive Storage Layer**: Extended IStorage interface with complete CRUD operations for delivery and alert management
+
 ### Latest Enhancement (January 5, 2025)
 - **Intelligent Recognition System**: Sophisticated pattern matching for rate types, equipment identification, and system classification
 - **Automatic Field Population**: Complete NPT reports with all required fields (causes, actions, departments) extracted from billing descriptions
@@ -50,6 +60,7 @@ The platform serves different user roles (drilling managers, supervisors, and ad
   - Security policies acknowledgment
   - Platform capabilities overview
   - Version 2.0 highlights
+- **Smart NPT Tracking Core**: Advanced alerting system with SLA monitoring, report deliveries tracking, and comprehensive lifecycle management with daily granularity and timeline visualization fully integrated into the monthly NPT reporting module
 
 ## User Preferences
 
