@@ -383,6 +383,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Business rule validations
       const errors = validateNptReport(validatedData, user);
+      console.log("Validation errors for NPT report:", errors);
+      console.log("Validated data:", JSON.stringify(validatedData, null, 2));
       if (errors.length > 0) {
         return res.status(400).json({ message: "Validation failed", errors });
       }
@@ -391,6 +393,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(201).json(report);
     } catch (error) {
       if (error instanceof z.ZodError) {
+        console.log("Zod validation error:", JSON.stringify(error.errors, null, 2));
         return res.status(400).json({ message: "Validation failed", errors: error.errors });
       }
       console.error("Error creating NPT report:", error);

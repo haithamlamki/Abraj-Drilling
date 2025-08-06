@@ -252,6 +252,7 @@ export default function NptForm() {
       }
       
       console.error("NPT Report creation error:", error);
+      console.log("Full error object:", JSON.stringify(error, null, 2));
       
       let errorMessage = "Failed to create NPT report";
       
