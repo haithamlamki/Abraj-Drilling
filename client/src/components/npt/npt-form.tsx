@@ -238,7 +238,7 @@ export default function NptForm() {
         setSelectedNptType("");
       }
     },
-    onError: (error) => {
+    onError: (error: any) => {
       if (isUnauthorizedError(error)) {
         toast({
           title: "Unauthorized",
@@ -251,9 +251,39 @@ export default function NptForm() {
         return;
       }
       
-      const errorMessage = error.message.includes('validation') 
-        ? "Please check the form for errors" 
-        : "Failed to create NPT report";
+      console.error("NPT Report creation error:", error);
+      
+      let errorMessage = "Failed to create NPT report";
+      
+      // Try to parse detailed error information
+      if (error.message) {
+        try {
+          // Check if error message contains JSON
+          if (error.message.includes('{')) {
+            const jsonStart = error.message.indexOf('{');
+            const jsonStr = error.message.substring(jsonStart);
+            const errorData = JSON.parse(jsonStr);
+            
+            if (errorData.errors && Array.isArray(errorData.errors)) {
+              // Format validation errors
+              const errorList = errorData.errors.map((err: any) => {
+                if (err.path && err.message) {
+                  return `${err.path.join('.')}: ${err.message}`;
+                }
+                return err.message || err;
+              });
+              errorMessage = `Validation errors:\n${errorList.join('\n')}`;
+            } else if (errorData.message) {
+              errorMessage = errorData.message;
+            }
+          } else {
+            errorMessage = error.message;
+          }
+        } catch (parseError) {
+          // If parsing fails, use the original error message
+          errorMessage = error.message;
+        }
+      }
       
       toast({
         title: "Error",
@@ -293,7 +323,7 @@ export default function NptForm() {
         setSelectedNptType("");
       }
     },
-    onError: (error) => {
+    onError: (error: any) => {
       if (isUnauthorizedError(error)) {
         toast({
           title: "Unauthorized",
@@ -306,9 +336,39 @@ export default function NptForm() {
         return;
       }
       
+      console.error("NPT Report submission error:", error);
+      
+      let errorMessage = "Failed to submit NPT report for review";
+      
+      if (error.message) {
+        try {
+          if (error.message.includes('{')) {
+            const jsonStart = error.message.indexOf('{');
+            const jsonStr = error.message.substring(jsonStart);
+            const errorData = JSON.parse(jsonStr);
+            
+            if (errorData.errors && Array.isArray(errorData.errors)) {
+              const errorList = errorData.errors.map((err: any) => {
+                if (err.path && err.message) {
+                  return `${err.path.join('.')}: ${err.message}`;
+                }
+                return err.message || err;
+              });
+              errorMessage = `Validation errors:\n${errorList.join('\n')}`;
+            } else if (errorData.message) {
+              errorMessage = errorData.message;
+            }
+          } else {
+            errorMessage = error.message;
+          }
+        } catch (parseError) {
+          errorMessage = error.message;
+        }
+      }
+      
       toast({
         title: "Error",
-        description: "Failed to submit NPT report for review",
+        description: errorMessage,
         variant: "destructive",
       });
     },
