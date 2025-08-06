@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Settings, Plus, Trash2, Users, Database, Cog, UserPlus, Edit, Shield, Upload, X, Check, Palette, Bell, FileText, Download } from "lucide-react";
+import { Settings, Plus, Trash2, Users, Database, Cog, UserPlus, Edit, Shield, Upload, X, Check, Palette, Bell, FileText, Download, Key } from "lucide-react";
 import type { System, Equipment, Department, ActionParty, Rig, User } from "@shared/schema";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
@@ -256,8 +256,8 @@ export default function SettingsPage() {
   });
 
   const updateUserMutation = useMutation({
-    mutationFn: async ({ id, updates }: { id: string; updates: any }) => {
-      const response = await apiRequest('PATCH', `/api/users/${id}`, updates);
+    mutationFn: async ({ id, ...userData }: { id: string; email: string; firstName: string; role: string; rigIds: number[] }) => {
+      const response = await apiRequest('PATCH', `/api/users/${id}`, userData);
       return response.json();
     },
     onSuccess: () => {
@@ -266,6 +266,26 @@ export default function SettingsPage() {
       setEditingType(null);
       setEditingUserData(null);
       toast({ title: "Success", description: "User updated successfully" });
+    },
+  });
+
+  const createUserMutation = useMutation({
+    mutationFn: async (userData: any) => {
+      const response = await apiRequest('POST', '/api/users', userData);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/users'] });
+      setIsDialogOpen(false);
+      setNewUserData({
+        id: "",
+        email: "",
+        firstName: "",
+        role: "drilling_manager",
+        rigIds: [],
+        departmentId: null,
+      });
+      toast({ title: "Success", description: "User created successfully" });
     },
   });
   
@@ -305,25 +325,7 @@ export default function SettingsPage() {
     },
   });
 
-  const createUserMutation = useMutation({
-    mutationFn: async (userData: typeof newUserData) => {
-      const response = await apiRequest('POST', '/api/users', userData);
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/users'] });
-      setIsDialogOpen(false);
-      setNewUserData({
-        id: "",
-        email: "",
-        firstName: "",
-        role: "drilling_manager",
-        rigIds: [],
-        departmentId: null,
-      });
-      toast({ title: "Success", description: "User created successfully" });
-    },
-  });
+
 
   const createRigMutation = useMutation({
     mutationFn: async (rigData: { rigNumber: string; section: string; client: string; location: string; isActive: boolean }) => {
@@ -906,28 +908,36 @@ export default function SettingsPage() {
               <TabsContent value="users">
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between">
-                    <CardTitle>User Management</CardTitle>
-                    <Dialog open={isDialogOpen && !editingUserId} onOpenChange={(open) => {
-                      if (!open) {
-                        setIsDialogOpen(false);
-                        setNewUserData({
-                          id: "",
-                          email: "",
-                          firstName: "",
-                          role: "drilling_manager",
-                          rigIds: [],
-                          departmentId: null,
-                        });
-                      } else {
-                        setIsDialogOpen(true);
-                      }
-                    }}>
-                      <DialogTrigger asChild>
-                        <Button size="sm" data-testid="button-add-user">
-                          <UserPlus className="h-4 w-4 mr-1" />
-                          Add User
-                        </Button>
-                      </DialogTrigger>
+                    <CardTitle className="flex items-center gap-2">
+                      <Users className="h-5 w-5" />
+                      User Management & Access Control
+                    </CardTitle>
+                    <div className="flex items-center gap-2">
+                      <Button variant="outline" size="sm" className="flex items-center gap-2">
+                        <Download className="h-4 w-4" />
+                        Export Users
+                      </Button>
+                      <Dialog open={isDialogOpen && !editingUserId} onOpenChange={(open) => {
+                        if (!open) {
+                          setIsDialogOpen(false);
+                          setNewUserData({
+                            id: "",
+                            email: "",
+                            firstName: "",
+                            role: "drilling_manager",
+                            rigIds: [],
+                            departmentId: null,
+                          });
+                        } else {
+                          setIsDialogOpen(true);
+                        }
+                      }}>
+                        <DialogTrigger asChild>
+                          <Button size="sm" data-testid="button-add-user">
+                            <UserPlus className="h-4 w-4 mr-1" />
+                            Create User
+                          </Button>
+                        </DialogTrigger>
                       <DialogContent>
                         <DialogHeader>
                           <DialogTitle>Add New User</DialogTitle>
@@ -1078,17 +1088,42 @@ export default function SettingsPage() {
                         </div>
                       </DialogContent>
                     </Dialog>
+                  </div>
                   </CardHeader>
                   <CardContent>
+                    {/* Search and Filter Bar */}
+                    <div className="flex items-center justify-between mb-4 gap-4">
+                      <div className="flex items-center gap-2 flex-1">
+                        <Input 
+                          placeholder="Search users by name, email, or role..." 
+                          className="max-w-md"
+                        />
+                        <Select defaultValue="all">
+                          <SelectTrigger className="w-[140px]">
+                            <SelectValue placeholder="Filter by Role" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All Roles</SelectItem>
+                            <SelectItem value="admin">Admin</SelectItem>
+                            <SelectItem value="supervisor">Supervisor</SelectItem>
+                            <SelectItem value="drilling_manager">Drilling Manager</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        {users.length} users total
+                      </div>
+                    </div>
+
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Name</TableHead>
-                          <TableHead>Email</TableHead>
-                          <TableHead>Role</TableHead>
-                          <TableHead>Assigned Rig</TableHead>
+                          <TableHead className="w-[200px]">User Details</TableHead>
+                          <TableHead>Role & Permissions</TableHead>
+                          <TableHead>Assigned Rigs</TableHead>
                           <TableHead>Status</TableHead>
-                          <TableHead>Actions</TableHead>
+                          <TableHead>Last Activity</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -1098,76 +1133,90 @@ export default function SettingsPage() {
                           const isEditing = editingItemId === currentUserData.id && editingType === "user";
                           
                           return (
-                            <TableRow key={currentUserData.id}>
+                            <TableRow key={currentUserData.id} className="group hover:bg-muted/50">
                               <TableCell className="font-medium">
+                                <div className="flex items-center space-x-3">
+                                  <div className="h-8 w-8 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center text-white text-sm font-medium">
+                                    {(currentUserData.firstName || currentUserData.email || 'U')[0].toUpperCase()}
+                                  </div>
+                                  <div>
+                                    {isEditing ? (
+                                      <div className="space-y-1">
+                                        <Input
+                                          value={editingUserData?.firstName || ""}
+                                          onChange={(e) => setEditingUserData({...editingUserData!, firstName: e.target.value})}
+                                          placeholder="Full Name"
+                                          className="h-8 w-40"
+                                        />
+                                        <Input
+                                          value={editingUserData?.email || ""}
+                                          onChange={(e) => setEditingUserData({...editingUserData!, email: e.target.value})}
+                                          placeholder="Email"
+                                          className="h-8 w-40"
+                                        />
+                                      </div>
+                                    ) : (
+                                      <div 
+                                        className="cursor-pointer hover:text-blue-600"
+                                        onClick={() => {
+                                          setEditingItemId(currentUserData.id);
+                                          setEditingType("user");
+                                          setEditingUserData({
+                                            email: currentUserData.email || "",
+                                            firstName: currentUserData.firstName || "",
+                                            role: currentUserData.role || "",
+                                            rigId: currentUserData.rigId,
+                                            rigIds: userRigIds
+                                          });
+                                        }}
+                                      >
+                                        <div className="font-medium text-sm">{currentUserData.firstName || 'Unnamed User'}</div>
+                                        <div className="text-xs text-muted-foreground">{currentUserData.email}</div>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </TableCell>
+                              
+                              <TableCell>
                                 {isEditing ? (
-                                  <Input
-                                    value={editingUserData?.firstName || ""}
-                                    onChange={(e) => setEditingUserData({...editingUserData!, firstName: e.target.value})}
-                                    placeholder="Name"
-                                    className="h-8 w-48"
-                                  />
+                                  <div className="space-y-2">
+                                    <Select
+                                      value={editingUserData?.role}
+                                      onValueChange={(value) => setEditingUserData({...editingUserData!, role: value})}
+                                    >
+                                      <SelectTrigger className="h-8 w-36">
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="admin">Admin</SelectItem>
+                                        <SelectItem value="supervisor">Supervisor</SelectItem>
+                                        <SelectItem value="drilling_manager">Drilling Manager</SelectItem>
+                                        {customRoles.map((role) => (
+                                          <SelectItem key={role} value={role}>{role}</SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
                                 ) : (
-                                  <div 
-                                    className="cursor-pointer hover:underline flex items-center gap-2"
-                                    onClick={() => {
-                                      setEditingItemId(currentUserData.id);
-                                      setEditingType("user");
-                                      setEditingUserData({
-                                        email: currentUserData.email || "",
-                                        firstName: currentUserData.firstName || "",
-                                        role: currentUserData.role,
-                                        rigId: currentUserData.rigId,
-                                        rigIds: userRigIds
-                                      });
-                                    }}
-                                  >
-                                    {currentUserData.firstName}
-                                    <Edit className="h-3 w-3 opacity-50" />
+                                  <div className="space-y-1">
+                                    <Badge variant={currentUserData.role === 'admin' ? 'destructive' : currentUserData.role === 'supervisor' ? 'default' : 'secondary'}>
+                                      <Shield className="h-3 w-3 mr-1" />
+                                      {currentUserData.role?.replace('_', ' ')}
+                                    </Badge>
+                                    <div className="text-xs text-muted-foreground">
+                                      {currentUserData.role === 'admin' ? 'Full System Access' : 
+                                       currentUserData.role === 'supervisor' ? 'Rig Management Access' : 
+                                       'Basic Reporting Access'}
+                                    </div>
                                   </div>
                                 )}
                               </TableCell>
-                              <TableCell>
-                                {isEditing ? (
-                                  <Input
-                                    type="email"
-                                    value={editingUserData?.email || ""}
-                                    onChange={(e) => setEditingUserData({...editingUserData!, email: e.target.value})}
-                                    className="h-8 w-48"
-                                  />
-                                ) : (
-                                  currentUserData.email
-                                )}
-                              </TableCell>
-                              <TableCell>
-                                {isEditing ? (
-                                  <Select
-                                    value={editingUserData?.role}
-                                    onValueChange={(value) => setEditingUserData({...editingUserData!, role: value})}
-                                  >
-                                    <SelectTrigger className="h-8 w-36">
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="admin">Admin</SelectItem>
-                                      <SelectItem value="supervisor">Supervisor</SelectItem>
-                                      <SelectItem value="drilling_manager">Drilling Manager</SelectItem>
-                                      {customRoles.map((role) => (
-                                        <SelectItem key={role} value={role}>{role}</SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                ) : (
-                                  <Badge variant={currentUserData.role === 'admin' ? 'destructive' : 'default'}>
-                                    <Shield className="h-3 w-3 mr-1" />
-                                    {currentUserData.role}
-                                  </Badge>
-                                )}
-                              </TableCell>
+                              
                               <TableCell>
                                 {isEditing ? (
                                   <Select>
-                                    <SelectTrigger className="h-8 w-32">
+                                    <SelectTrigger className="h-8 w-36">
                                       <SelectValue placeholder={
                                         editingUserData?.rigIds.length === 0 
                                           ? "Select rigs" 
@@ -1221,11 +1270,26 @@ export default function SettingsPage() {
                                     </SelectContent>
                                   </Select>
                                 ) : (
-                                  assignedRigs.length === 0 
-                                    ? '-' 
-                                    : assignedRigs.length === rigs.length 
-                                      ? 'All Rigs' 
-                                      : assignedRigs.map((r: any) => `Rig ${r.rigNumber}`).join(', ')
+                                  <div className="space-y-1">
+                                    {assignedRigs.length === 0 ? (
+                                      <Badge variant="outline" className="text-xs">No Rigs Assigned</Badge>
+                                    ) : assignedRigs.length === rigs.length ? (
+                                      <Badge className="text-xs">All Rigs</Badge>
+                                    ) : (
+                                      <div className="flex flex-wrap gap-1">
+                                        {assignedRigs.slice(0, 2).map((r: any) => (
+                                          <Badge key={r.id} variant="outline" className="text-xs">
+                                            Rig {r.rigNumber}
+                                          </Badge>
+                                        ))}
+                                        {assignedRigs.length > 2 && (
+                                          <Badge variant="outline" className="text-xs">
+                                            +{assignedRigs.length - 2} more
+                                          </Badge>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
                                 )}
                               </TableCell>
                               <TableCell>
@@ -1260,14 +1324,70 @@ export default function SettingsPage() {
                                     </Button>
                                   </div>
                                 ) : (
-                                  <div className="flex gap-1">
+                                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity justify-end">
+                                    <Dialog>
+                                      <DialogTrigger asChild>
+                                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title="Change Password">
+                                          <Key className="h-4 w-4" />
+                                        </Button>
+                                      </DialogTrigger>
+                                      <DialogContent>
+                                        <DialogHeader>
+                                          <DialogTitle>Change Password - {currentUserData.firstName}</DialogTitle>
+                                        </DialogHeader>
+                                        <div className="space-y-4">
+                                          <div>
+                                            <Label htmlFor="newPassword">New Password</Label>
+                                            <Input
+                                              id="newPassword"
+                                              type="password"
+                                              placeholder="Enter new password"
+                                            />
+                                          </div>
+                                          <div>
+                                            <Label htmlFor="confirmPassword">Confirm Password</Label>
+                                            <Input
+                                              id="confirmPassword"
+                                              type="password"
+                                              placeholder="Confirm new password"
+                                            />
+                                          </div>
+                                          <div className="flex justify-end gap-2">
+                                            <Button variant="outline">Cancel</Button>
+                                            <Button>Update Password</Button>
+                                          </div>
+                                        </div>
+                                      </DialogContent>
+                                    </Dialog>
+                                    
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-8 w-8 p-0"
+                                      title="Edit User"
+                                      onClick={() => {
+                                        setEditingItemId(currentUserData.id);
+                                        setEditingType("user");
+                                        setEditingUserData({
+                                          email: currentUserData.email || "",
+                                          firstName: currentUserData.firstName || "",
+                                          role: currentUserData.role || "",
+                                          rigId: currentUserData.rigId,
+                                          rigIds: userRigIds
+                                        });
+                                      }}
+                                    >
+                                      <Edit className="h-4 w-4" />
+                                    </Button>
+                                    
                                     {currentUserData.id !== user?.id && (
                                       <Button
-                                        variant="destructive"
+                                        variant="ghost"
                                         size="sm"
+                                        className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                                        title="Delete User"
                                         onClick={() => deleteUserMutation.mutate(currentUserData.id)}
                                         disabled={deleteUserMutation.isPending}
-                                        data-testid={`button-delete-user-${currentUserData.id}`}
                                       >
                                         <Trash2 className="h-4 w-4" />
                                       </Button>

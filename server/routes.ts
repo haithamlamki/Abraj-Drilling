@@ -183,10 +183,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Only admins can create users" });
       }
       
-      const { id, email, firstName, lastName, role, rigIds, departmentId } = req.body;
+      const { id, email, firstName, lastName, role, rigIds, departmentId, password } = req.body;
       
-      // Use provided ID or create a temporary one
-      const newUserId = id || `temp_${Date.now()}`;
+      // Use provided ID or create a UUID
+      const newUserId = id || `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       
       const newUser = await storage.upsertUser({
         id: newUserId,
@@ -194,8 +194,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         firstName,
         lastName,
         role,
-        rigId: rigIds && rigIds.length > 0 ? rigIds[0] : null, // Keep first rig for backward compatibility
+        rigId: rigIds && rigIds.length > 0 ? rigIds[0] : null,
         profileImageUrl: null,
+        password: password || 'defaultPassword123' // Set default password if not provided
       });
       
       // Add multiple rig assignments if provided
@@ -207,6 +208,79 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error creating user:", error);
       res.status(500).json({ message: "Failed to create user" });
+    }
+  });
+
+  // Password management endpoint
+  app.put('/api/users/:id/password', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const currentUser = await storage.getUser(userId);
+      const targetUserId = req.params.id;
+      
+      // Only admins can change other users' passwords, users can change their own
+      if (currentUser?.role !== 'admin' && userId !== targetUserId) {
+        return res.status(403).json({ message: "You can only change your own password" });
+      }
+      
+      const { password, currentPassword } = req.body;
+      
+      if (!password) {
+        return res.status(400).json({ message: "New password is required" });
+      }
+      
+      // If user is changing their own password, verify current password
+      if (userId === targetUserId && currentPassword) {
+        const user = await storage.getUser(userId);
+        if (user?.password !== currentPassword) {
+          return res.status(400).json({ message: "Current password is incorrect" });
+        }
+      }
+      
+      await storage.updateUserPassword(targetUserId, password);
+      res.json({ message: "Password updated successfully" });
+    } catch (error) {
+      console.error("Error updating password:", error);
+      res.status(500).json({ message: "Failed to update password" });
+    }
+  });
+
+  // User permissions endpoint
+  app.get('/api/users/:id/permissions', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const currentUser = await storage.getUser(userId);
+      const targetUserId = req.params.id;
+      
+      if (currentUser?.role !== 'admin') {
+        return res.status(403).json({ message: "Only admins can view user permissions" });
+      }
+      
+      const user = await storage.getUser(targetUserId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      
+      const rigIds = await storage.getUserRigs(targetUserId);
+      
+      // Define role-based permissions
+      const permissions = {
+        canCreateReports: ['admin', 'supervisor', 'drilling_manager'].includes(user.role || ''),
+        canApproveReports: ['admin', 'supervisor'].includes(user.role || ''),
+        canViewAllReports: user.role === 'admin',
+        canManageUsers: user.role === 'admin',
+        canManageSettings: user.role === 'admin',
+        canUploadBilling: ['admin', 'supervisor', 'drilling_manager'].includes(user.role || ''),
+        canExportData: true,
+        assignedRigs: rigIds,
+        maxReportsPerMonth: user.role === 'admin' ? -1 : 100,
+        canDeleteReports: user.role === 'admin'
+      };
+      
+      res.json(permissions);
+    } catch (error) {
+      console.error("Error fetching user permissions:", error);
+      res.status(500).json({ message: "Failed to fetch user permissions" });
     }
   });
 
