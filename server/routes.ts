@@ -21,6 +21,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
   await setupAuth(app);
 
+  // Custom login endpoint for email/password authentication
+  app.post('/api/auth/login', async (req, res) => {
+    try {
+      const { email, password } = req.body;
+      
+      if (!email || !password) {
+        return res.status(400).json({ message: "Email and password are required" });
+      }
+
+      // Find user by email
+      const user = await storage.getUserByEmail(email);
+      if (!user) {
+        return res.status(401).json({ message: "Invalid email or password" });
+      }
+
+      // Simple password verification for demo
+      // In production, you would use bcrypt for hashing
+      if (user.password && user.password !== password) {
+        return res.status(401).json({ message: "Invalid email or password" });
+      }
+      
+      // Set password if user doesn't have one
+      if (!user.password && password) {
+        await storage.updateUserPassword(user.id, password);
+      }
+
+      // Create a session-like response
+      req.session = req.session || {};
+      (req.session as any).user = {
+        claims: { sub: user.id },
+        access_token: 'demo_token',
+        expires_at: Math.floor(Date.now() / 1000) + 3600 // 1 hour
+      };
+
+      res.json({ 
+        success: true, 
+        user: {
+          id: user.id,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          role: user.role
+        }
+      });
+    } catch (error) {
+      console.error("Login error:", error);
+      res.status(500).json({ message: "Login failed" });
+    }
+  });
+
   // Auth routes
   app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
     try {

@@ -71,13 +71,13 @@ export default function Landing() {
               </CardHeader>
               <CardContent className="pt-6">
                 <Button 
-                  onClick={() => window.location.href = '/api/login'}
+                  onClick={() => window.location.href = '/login'}
                   className="w-full py-6 text-lg"
                   size="lg"
                   data-testid="button-login"
                 >
                   <Shield className="mr-2 h-5 w-5" />
-                  Sign In with Secure Authentication
+                  Sign In to Your Account
                 </Button>
                 
                 <div className="mt-6 text-center">

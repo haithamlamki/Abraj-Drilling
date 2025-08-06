@@ -27,7 +27,17 @@ The platform serves different user roles (drilling managers, supervisors, and ad
 - **Enhanced Monthly Reports Module**: Integrated delivery tracking directly into existing monthly NPT reporting workflow
 - **Comprehensive Storage Layer**: Extended IStorage interface with complete CRUD operations for delivery and alert management
 
-### Latest Enhancement (January 5, 2025)
+### Latest Enhancement (January 6, 2025)
+- **Custom Email/Password Authentication**: Complete replacement of Replit Auth with custom login system:
+  - Custom login page with email/ID and password form fields
+  - Password field added to users table with database migration
+  - Backend login endpoint with simple password verification
+  - Session management compatible with existing authentication middleware
+  - Demo user created (admin@drilling.com / admin123) for testing
+  - Landing page updated to redirect to custom login page
+  - Frontend routing updated to include /login route for unauthenticated users
+
+### Previous Enhancement (January 5, 2025)
 - **Intelligent Recognition System**: Sophisticated pattern matching for rate types, equipment identification, and system classification
 - **Automatic Field Population**: Complete NPT reports with all required fields (causes, actions, departments) extracted from billing descriptions
 - **Confidence Scoring**: Advanced algorithms provide confidence metrics for extraction accuracy
@@ -95,10 +105,11 @@ Preferred communication style: Simple, everyday language.
   - Sessions table for authentication state
 
 ### Authentication & Authorization
-- **Authentication Provider**: Replit Auth using OpenID Connect
+- **Authentication Provider**: Custom email/password authentication system (replaced Replit Auth)
 - **Session Storage**: PostgreSQL-backed sessions with 7-day TTL
 - **Role-Based Access**: Three user roles with different permission levels
 - **Security**: HTTP-only cookies, secure session handling, and CSRF protection
+- **Demo Credentials**: admin@drilling.com / admin123 for testing
 
 ### File Processing Architecture
 - **Upload Handler**: Uppy dashboard with drag-and-drop support
