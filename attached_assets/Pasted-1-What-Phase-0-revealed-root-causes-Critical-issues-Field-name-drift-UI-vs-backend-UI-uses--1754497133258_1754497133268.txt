@@ -1,0 +1,177 @@
+1) What Phase 0 revealed (root causes)
+Critical issues
+
+Field-name drift (UI vs backend):
+
+UI uses: thePart, failureDesc, corrective
+
+Server schema uses: parentEquipment, immediateCause, correctiveAction
+→ This silently breaks both locking and validation in single & bulk forms.
+
+Wrong call signature in bulk form:
+
+Code uses enabledFields({ nptType: row.nptType })
+
+Function expects enabledFields(nptType: string)
+→ The predicate always resolves incorrectly → cells don’t lock.
+
+UI cleanup not guaranteed in bulk:
+
+When NPT Type changes, disabled fields aren’t reliably cleared per row.
+
+Rule windows must be exact:
+
+N2 must be inclusive in the windows you specified; any “≥4h” heuristic was wrong.
+
+2) Canonical single source of truth (what we’ll enforce)
+NPT types: Contractual, Abraj.
+
+Editable-set by type:
+
+Contractual → only System + Contractual Process editable.
+
+Abraj → Equipment/Failure/Cause group editable and Contractual Process disabled.
+
+N2 required iff:
+
+Drilling & Project: 3.75 ≤ Hrs ≤ 5.75
+
+Maintenance (M/E): 2.0 ≤ Hrs ≤ 5.75
+
+Failure Investigation Report required iff Hrs ≥ 6.0 (file or AI text).
+
+Canonical field keys (use everywhere):
+
+perl
+Copy code
+system, contractualProcess,
+equipment, thePart, failureDesc, rootCause,
+corrective, futureAction, actionParty,
+n2Number, investigationFileId, investigationAiText
+Compatibility aliases on server (accept old names):
+
+parentEquipment → thePart
+
+immediateCause → failureDesc
+
+correctiveAction → corrective
+
+3) Copy-paste prompt for Replit AI (Phase 1–3)
+Paste everything between the lines into Replit AI.
+
+csharp
+Copy code
+## PHASE 1 — Align single source of truth
+
+1) Create/ensure shared rules at shared/nptRules.ts with EXACT exports:
+
+export const NPT_TYPES = { CONTRACTUAL: "Contractual", ABRAJ: "Abraj" } as const;
+export const DEPARTMENTS = {
+  DRILLING_PROJECT: "Drilling & Project",
+  MAINTENANCE_ME: "Maintenance (M/E)",
+} as const;
+
+export const isContractual = (t?: string) => t === NPT_TYPES.CONTRACTUAL;
+export const isAbraj       = (t?: string) => t === NPT_TYPES.ABRAJ;
+
+export function needsN2(dept?: string, hrs?: number) {
+  if (hrs == null) return false;
+  if (dept === DEPARTMENTS.DRILLING_PROJECT) return hrs >= 3.75 && hrs <= 5.75;
+  if (dept === DEPARTMENTS.MAINTENANCE_ME)   return hrs >= 2.0  && hrs <= 5.75;
+  return false;
+}
+export const needsInvestigationReport = (hrs?: number) => (hrs ?? 0) >= 6.0;
+
+export function enabledFields(nptType?: string) {
+  const C = isContractual(nptType), A = isAbraj(nptType);
+  return {
+    system: true,
+    contractualProcess: C,
+    equipment: A, thePart: A, failureDesc: A, rootCause: A,
+    corrective: A, futureAction: A, actionParty: A,
+    n2Number: true,
+  } as const;
+}
+
+export function cleanupByType<T extends Record<string, any>>(row: T): T {
+  const e = enabledFields(row.nptType); const out = { ...row };
+  if (!e.contractualProcess) out.contractualProcess = "";
+  if (!e.equipment) {
+    out.equipment = "";
+    out.thePart = ""; out.failureDesc = ""; out.rootCause = "";
+    out.corrective = ""; out.futureAction = ""; out.actionParty = "";
+  }
+  return out;
+}
+
+2) Replace ALL other rule utilities with imports from shared/nptRules.ts.
+   Run a project-wide search to delete duplicates.
+
+## PHASE 2 — Fix UI editability & cleanup
+
+A) Single form (client/src/components/npt/npt-form.tsx):
+   - Compute: const ef = enabledFields(watch("nptType"));
+   - Set disabled={!ef.system} etc. for each input.
+   - Add useEffect(() => setValue(...) with cleanupByType(currentFormValues), [watch("nptType")]).
+
+B) Bulk form (client/src/components/npt/npt-form-multi.tsx):
+   - IMPORTANT: Fix the wrong call:
+     BEFORE: enabledFields({ nptType: row.nptType })
+     AFTER:  enabledFields(row.nptType)
+   - For each column, add a per-row editable predicate using enabledFields(row.nptType).
+   - On NPT type change per row, call cleanupByType(row) and update that row’s values.
+   - Visually grey out disabled cells (existing classes) and block key entry.
+
+## PHASE 3 — Validation & server-side safety net
+
+A) Frontend Zod (client/src/validation/nptEntry.ts):
+   - superRefine:
+     * Contractual → contractualProcess required.
+     * Abraj → require: equipment,thePart,failureDesc,rootCause,corrective,futureAction,actionParty.
+     * needsN2(department,hours) → n2Number required.
+     * needsInvestigationReport(hours) → require investigationFileId OR investigationAiText.
+   - Keep hours in [0,24] with 0.25 step (existing snapping).
+   - Return field-level errors { field: [msg] }.
+
+B) Server schema (server/schemas/npt.ts):
+   - Add alias normalization BEFORE cleanupByType:
+       if (v.parentEquipment && !v.thePart) v.thePart = v.parentEquipment;
+       if (v.immediateCause && !v.failureDesc) v.failureDesc = v.immediateCause;
+       if (v.correctiveAction && !v.corrective) v.corrective = v.correctiveAction;
+   - Then apply cleanupByType(v).
+   - Implement the same superRefine rules as frontend.
+   - Reject with 400 and { errors: fieldErrors }.
+
+C) Route handlers:
+   - Use serverNptSchema.safeParse; on success persist normalized values.
+
+## VERIFICATION — Must return:
+
+1) Unified diffs for files changed:
+   - shared/nptRules.ts
+   - client/src/components/npt/npt-form.tsx
+   - client/src/components/npt/npt-form-multi.tsx
+   - client/src/validation/nptEntry.ts
+   - server/schemas/npt.ts
+2) Screenshots:
+   - Single form with Contractual selected: only System + Contractual Process enabled.
+   - Single form with Abraj: Contractual Process disabled; group fields enabled.
+   - Bulk form showing a row flipping from Contractual→Abraj and cells locking/unlocking.
+3) Short log proving rules:
+   - needsN2("Drilling & Project",3.75)=true; (5.75)=true
+   - needsN2("Maintenance (M/E)",2.0)=true; (5.75)=true
+   - needsN2(..., <2.0 or >5.75)=false
+   - needsInvestigationReport(6.0)=true; (5.75)=false
+4) Statement that no other duplicate rule files remain, and all forms import from shared/nptRules.ts.
+
+STOP after you provide the diffs + screenshots + proof logs for review.
+4) What I’ll check next (acceptance)
+Bulk form now calls enabledFields(row.nptType) (not with an object).
+
+Disabled cells truly can’t be edited in bulk & single.
+
+Server rejects bad payloads and normalizes aliases.
+
+N2/Investigation rules match the exact windows.
+
+No duplicate rule files linger.

@@ -26,7 +26,7 @@ import QuarterHourField from "@/components/QuarterHourField";
 import { isQuarter } from "@/lib/time";
 import { NPT_STATUS } from "@shared/status";
 
-// Create a form schema based on insertNptReportSchema with additional validation
+// Create a form schema with canonical field names
 const formSchema = z.object({
   rigId: z.number().nullable().optional(),
   userId: z.string().optional(),
@@ -34,13 +34,13 @@ const formSchema = z.object({
   hours: z.number().min(0).max(24).refine(isQuarter, "Hours must be in 0.25 increments"),
   nptType: z.string().min(1, "NPT Type is required"),
   system: z.string().min(1, "System is required"),
-  parentEquipment: z.string().optional(),
-  partEquipment: z.string().optional(),
+  equipment: z.string().optional(),
+  thePart: z.string().optional(),
   contractualProcess: z.string().optional(),
   department: z.string().min(1, "Department is required"),
-  immediateCause: z.string().optional(),
+  failureDesc: z.string().optional(),
   rootCause: z.string().optional(),
-  correctiveAction: z.string().optional(),
+  corrective: z.string().optional(),
   futureAction: z.string().optional(),
   actionParty: z.string().optional(),
   notificationNumber: z.string().optional(),
@@ -64,11 +64,11 @@ const formSchema = z.object({
 
   if (isAbraj(data.nptType)) {
     const requiredFields = [
-      { field: "parentEquipment", label: "Parent Equipment" },
-      { field: "partEquipment", label: "Part Equipment" },
-      { field: "immediateCause", label: "Immediate Cause" },
+      { field: "equipment", label: "Equipment" },
+      { field: "thePart", label: "The Part" },
+      { field: "failureDesc", label: "Failure Description" },
       { field: "rootCause", label: "Root Cause" },
-      { field: "correctiveAction", label: "Corrective Action" },
+      { field: "corrective", label: "Corrective Action" },
       { field: "futureAction", label: "Future Action" },
       { field: "actionParty", label: "Action Party" },
     ] as const;
@@ -119,8 +119,14 @@ export default function NptForm() {
   const [selectedDepartment, setSelectedDepartment] = useState<string>("");
   const [selectedHours, setSelectedHours] = useState<number>(0);
   
+  // Initialize form first
+  const form = useForm<FormData>({
+    resolver: zodResolver(formSchema),
+    defaultValues: () => getDefaultValues(),
+  });
+  
   // Memoize enabled fields based on current NPT type
-  const enabledFieldsState = useMemo(() => enabledFields(selectedNptType), [selectedNptType]);
+  const enabledFieldsState = useMemo(() => enabledFields(form.watch("nptType")), [form.watch("nptType")]);
   const [billingData, setBillingData] = useState<BillingSheetRow | null>(null);
   
   // Get edit parameter from URL
@@ -159,13 +165,13 @@ export default function NptForm() {
         hours: existingReport.hours || 0,
         nptType: existingReport.nptType || "",
         system: existingReport.system || "",
-        parentEquipment: existingReport.parentEquipment || "",
-        partEquipment: existingReport.partEquipment || "",
+        equipment: existingReport.equipment || "",
+        thePart: existingReport.thePart || existingReport.parentEquipment || "",
         contractualProcess: existingReport.contractualProcess || "",
         department: existingReport.department || "",
-        immediateCause: existingReport.immediateCause || "",
+        failureDesc: existingReport.failureDesc || existingReport.immediateCause || "",
         rootCause: existingReport.rootCause || "",
-        correctiveAction: existingReport.correctiveAction || "",
+        corrective: existingReport.corrective || existingReport.correctiveAction || "",
         futureAction: existingReport.futureAction || "",
         actionParty: existingReport.actionParty || "",
         notificationNumber: existingReport.notificationNumber || "",
@@ -186,13 +192,13 @@ export default function NptForm() {
       hours: billingData?.hours || 0,
       nptType: billingData?.nbtType || "",
       system: "",
-      parentEquipment: "",
-      partEquipment: "",
+      equipment: "",
+      thePart: "",
       contractualProcess: "",
       department: "",
-      immediateCause: "",
+      failureDesc: "",
       rootCause: "",
-      correctiveAction: "",
+      corrective: "",
       futureAction: "",
       actionParty: "",
       notificationNumber: "",
@@ -218,7 +224,7 @@ export default function NptForm() {
           baseValues.system = billingData.extractedSystem;
         }
         if (billingData.extractedEquipment) {
-          baseValues.parentEquipment = billingData.extractedEquipment;
+          baseValues.equipment = billingData.extractedEquipment;
         }
         // The form will need manual input for other fields
       }
@@ -227,10 +233,7 @@ export default function NptForm() {
     return baseValues;
   };
 
-  const form = useForm<FormData>({
-    resolver: zodResolver(formSchema),
-    defaultValues: getDefaultValues(),
-  });
+  // Form is initialized above before the useEffects
 
   // Update form when billing data is loaded
   useEffect(() => {
@@ -274,6 +277,23 @@ export default function NptForm() {
   const { data: actionParties = [] } = useQuery<ActionParty[]>({
     queryKey: ['/api/action-parties'],
   });
+
+  // Add useEffect to clean up fields when NPT type changes
+  useEffect(() => {
+    const subscription = form.watch((values, { name }) => {
+      if (name === "nptType" && values.nptType !== selectedNptType) {
+        setSelectedNptType(values.nptType || "");
+        // Clean up disabled fields when NPT type changes
+        const cleanedValues = cleanupByType(values as any);
+        Object.keys(cleanedValues).forEach((key) => {
+          if (key !== "nptType") {
+            form.setValue(key as any, cleanedValues[key as keyof typeof cleanedValues]);
+          }
+        });
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [form, selectedNptType]);
 
   const createReportMutation = useMutation({
     mutationFn: async (data: FormData & { status?: string }) => {
@@ -696,13 +716,13 @@ export default function NptForm() {
                   <div className="p-1 border-r border-gray-200">
                     <FormField
                       control={form.control}
-                      name="parentEquipment"
+                      name="equipment"
                       render={({ field }) => (
                         <Select 
                           onValueChange={field.onChange} 
                           value={field.value || ''} 
                           disabled={!enabledFieldsState.equipment}
-                          data-testid="select-parent-equipment"
+                          data-testid="select-equipment"
                         >
                           <FormControl>
                             <SelectTrigger className={`h-8 text-xs border-0 rounded-none ${!enabledFieldsState.equipment ? 'bg-gray-100 opacity-50' : ''}`}>
@@ -725,7 +745,7 @@ export default function NptForm() {
                   <div className="p-1 border-r border-gray-200">
                     <FormField
                       control={form.control}
-                      name="partEquipment"
+                      name="thePart"
                       render={({ field }) => (
                         <FormControl>
                           <Input 
@@ -734,7 +754,7 @@ export default function NptForm() {
                             value={field.value || ''}
                             disabled={!enabledFieldsState.thePart}
                             className={`h-8 text-xs border-0 rounded-none ${!enabledFieldsState.thePart ? 'bg-gray-100 opacity-50' : ''}`}
-                            data-testid="input-part-equipment"
+                            data-testid="input-the-part"
                           />
                         </FormControl>
                       )}
@@ -794,7 +814,7 @@ export default function NptForm() {
                   <div className="p-1 border-r border-gray-200">
                     <FormField
                       control={form.control}
-                      name="immediateCause"
+                      name="failureDesc"
                       render={({ field }) => (
                         <FormControl>
                           <Input 
@@ -803,7 +823,7 @@ export default function NptForm() {
                             value={field.value || ''}
                             disabled={!enabledFieldsState.failureDesc}
                             className={`h-8 text-xs border-0 rounded-none ${!enabledFieldsState.failureDesc ? 'bg-gray-100 opacity-50' : ''}`}
-                            data-testid="input-immediate-cause"
+                            data-testid="input-failure-desc"
                           />
                         </FormControl>
                       )}
@@ -834,7 +854,7 @@ export default function NptForm() {
                   <div className="p-1 border-r border-gray-200">
                     <FormField
                       control={form.control}
-                      name="correctiveAction"
+                      name="corrective"
                       render={({ field }) => (
                         <FormControl>
                           <Input 
@@ -843,7 +863,7 @@ export default function NptForm() {
                             value={field.value || ''}
                             disabled={!enabledFieldsState.corrective}
                             className={`h-8 text-xs border-0 rounded-none ${!enabledFieldsState.corrective ? 'bg-gray-100 opacity-50' : ''}`}
-                            data-testid="input-corrective-action"
+                            data-testid="input-corrective"
                           />
                         </FormControl>
                       )}

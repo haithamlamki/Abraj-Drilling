@@ -9,10 +9,10 @@ export const nptEntrySchema = z.object({
 
   contractualProcess: z.string().optional(),
   equipment: z.string().optional(),
-  parentEquipment: z.string().optional(), // Changed from thePart to match schema
-  immediateCause: z.string().optional(), // Changed from failureDesc to match schema
+  thePart: z.string().optional(),
+  failureDesc: z.string().optional(),
   rootCause: z.string().optional(),
-  correctiveAction: z.string().optional(), // Changed from corrective to match schema
+  corrective: z.string().optional(),
   futureAction: z.string().optional(),
   actionParty: z.string().optional(),
 
@@ -42,10 +42,10 @@ export const nptEntrySchema = z.object({
   if (isAbraj(v.nptType)) {
     const requiredFields = [
       { field: "equipment", label: "Equipment" },
-      { field: "parentEquipment", label: "Parent Equipment" },
-      { field: "immediateCause", label: "Immediate Cause" },
+      { field: "thePart", label: "The Part" },
+      { field: "failureDesc", label: "Failure Description" },
       { field: "rootCause", label: "Root Cause" },
-      { field: "correctiveAction", label: "Corrective Action" },
+      { field: "corrective", label: "Corrective Action" },
       { field: "futureAction", label: "Future Action" },
       { field: "actionParty", label: "Action Party" },
     ] as const;

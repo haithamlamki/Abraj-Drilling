@@ -1,51 +1,35 @@
-export const NPT_TYPES = { 
-  CONTRACTUAL: "Contractual", 
-  ABRAJ: "Abraj" 
-} as const;
-
+export const NPT_TYPES = { CONTRACTUAL: "Contractual", ABRAJ: "Abraj" } as const;
 export const DEPARTMENTS = {
   DRILLING_PROJECT: "Drilling & Project",
   MAINTENANCE_ME: "Maintenance (M/E)",
 } as const;
 
-export type NptType = typeof NPT_TYPES[keyof typeof NPT_TYPES];
-
 export const isContractual = (t?: string) => t === NPT_TYPES.CONTRACTUAL;
-export const isAbraj = (t?: string) => t === NPT_TYPES.ABRAJ;
+export const isAbraj       = (t?: string) => t === NPT_TYPES.ABRAJ;
 
 export function needsN2(dept?: string, hrs?: number) {
   if (hrs == null) return false;
   if (dept === DEPARTMENTS.DRILLING_PROJECT) return hrs >= 3.75 && hrs <= 5.75;
-  if (dept === DEPARTMENTS.MAINTENANCE_ME) return hrs >= 2.0 && hrs <= 5.75;
+  if (dept === DEPARTMENTS.MAINTENANCE_ME)   return hrs >= 2.0  && hrs <= 5.75;
   return false;
 }
-
 export const needsInvestigationReport = (hrs?: number) => (hrs ?? 0) >= 6.0;
 
-/** Per NPT type, which fields are enabled (true = editable) */
 export function enabledFields(nptType?: string) {
-  const c = isContractual(nptType);
-  const a = isAbraj(nptType);
+  const C = isContractual(nptType), A = isAbraj(nptType);
   return {
-    system: true,                         // always editable
-    contractualProcess: c,                // editable ONLY for Contractual
-    // equipment/failure/cause group:
-    equipment: a,
-    thePart: a,
-    failureDesc: a,
-    rootCause: a,
-    corrective: a,
-    futureAction: a,
-    actionParty: a,
-    // N2 is editable always, but required only by hours/department
+    system: true,
+    contractualProcess: C,
+    equipment: A, thePart: A, failureDesc: A, rootCause: A,
+    corrective: A, futureAction: A, actionParty: A,
     n2Number: true,
   } as const;
 }
 
-/** When type changes, blank the now-disabled fields to keep payload clean */
 export function cleanupByType<T extends Record<string, any>>(row: T): T {
-  const e = enabledFields(row.nptType);
+  const e = enabledFields(row.nptType); 
   const out = { ...row };
+  
   if (!e.contractualProcess && 'contractualProcess' in out) {
     (out as any).contractualProcess = "";
   }
