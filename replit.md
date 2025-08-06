@@ -33,7 +33,10 @@ The platform serves different user roles (drilling managers, supervisors, and ad
   - Password field added to users table with database migration
   - Backend login endpoint with simple password verification
   - Session management compatible with existing authentication middleware
-  - Demo user created (admin@drilling.com / admin123) for testing
+  - Role-based demo accounts created for testing:
+    - Admin: admin@drilling.com / admin123 (full system access)
+    - Supervisor: supervisor@drilling.com / supervisor123 (assigned to rigs 104, 105)
+    - Drilling Manager: manager@drilling.com / manager123 (oversight of rigs 104, 105, 106, 107)
   - Landing page updated to redirect to custom login page
   - Frontend routing updated to include /login route for unauthenticated users
 
