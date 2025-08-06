@@ -1,0 +1,177 @@
+epository Interview & NPT Rules Enforcement (Doctor Mode)
+You are in DOCTOR MODE.
+Your job is to interview the codebase, surface duplicates/mismatches, and fix NPT-type editability & validations end-to-end.
+Do not make speculative edits. First, return the audit artifacts, then implement.
+
+Phase 0 — Repo Interview (MUST RETURN BEFORE EDITS)
+Project Map (tree):
+
+Print a tree (depth 3–4) of folders: client/, server/, shared/, scripts/, db/ (or their equivalents).
+If tree is missing, simulate with find/ls. Group by app (client/server).
+
+Key files inventory (paths only):
+
+All NPT forms/components (single + bulk).
+Examples to search: npt-form, npt-reports, npt-reports-bulk, bulk, grid, data-grid, ag-grid.
+
+All shared rules/schemas/utilities related to NPT.
+Examples: nptRules, shared/schema, shared/workflow.
+
+All validation schemas (frontend Zod, backend Zod/Joi).
+
+Backend routes/controllers for NPT create/update/submit.
+
+Any feature flags that can bypass validation.
+
+Search report (exact matches + line counts):
+
+NPT Type, Contractual, Abraj, contractualProcess, equipment, thePart, failureDesc, rootCause, corrective, futureAction, actionParty, n2Number, investigation.
+
+enabledFields, cleanupByType, needsN2, needsInvestigationReport (if exist).
+For each token: show file:line(s) with one-line context.
+
+Libraries actually used for the bulk grid: AG Grid / MUI Data Grid / React Data Grid? Show where configured (file + snippet).
+
+Current behavior snapshot:
+
+Where exactly is cell editability decided in the bulk grid? (show function or column defs)
+
+Where does single form set disabled? (show JSX snippet)
+
+Where does backend normalize/validate NPT rules? (show schema function)
+
+Deliverables for Phase 0:
+PROJECT_MAP, KEY_FILES, SEARCH_REPORT, GRID_LIB, CURRENT_BEHAVIOR.
+Stop here, wait for my OK.
+
+Phase 1 — Align Single Source of Truth (after I OK Phase 0)
+Create/ensure shared/nptRules.ts with EXACT logic:
+
+ts
+Copy code
+export const NPT_TYPES = { CONTRACTUAL: "Contractual", ABRAJ: "Abraj" } as const;
+export const DEPARTMENTS = {
+  DRILLING_PROJECT: "Drilling & Project",
+  MAINTENANCE_ME: "Maintenance (M/E)",
+} as const;
+
+export const isContractual = (t?: string) => t === NPT_TYPES.CONTRACTUAL;
+export const isAbraj       = (t?: string) => t === NPT_TYPES.ABRAJ;
+
+export function needsN2(dept?: string, hrs?: number) {
+  if (hrs == null) return false;
+  if (dept === DEPARTMENTS.DRILLING_PROJECT) return hrs >= 3.75 && hrs <= 5.75;
+  if (dept === DEPARTMENTS.MAINTENANCE_ME)   return hrs >= 2.0  && hrs <= 5.75;
+  return false;
+}
+
+export const needsInvestigationReport = (hrs?: number) => (hrs ?? 0) >= 6.0;
+
+export function enabledFields(nptType?: string) {
+  const C = isContractual(nptType), A = isAbraj(nptType);
+  return {
+    system: true,
+    contractualProcess: C,
+    equipment: A, thePart: A, failureDesc: A, rootCause: A,
+    corrective: A, futureAction: A, actionParty: A,
+    n2Number: true,
+  } as const;
+}
+
+export function cleanupByType<T extends Record<string, any>>(row: T): T {
+  const e = enabledFields(row.nptType); const out = { ...row };
+  if (!e.contractualProcess) out.contractualProcess = "";
+  if (!e.equipment) {
+    out.equipment = ""; out.thePart = ""; out.failureDesc = ""; out.rootCause = "";
+    out.corrective = ""; out.futureAction = ""; out.actionParty = "";
+  }
+  return out;
+}
+Replace any duplicated rule utilities elsewhere with imports from this file.
+
+Phase 2 — Enforce UI Editability (Single + Bulk)
+Single Form: set disabled={!enabledFields(form.nptType).fieldName} for each field.
+Add useEffect(()=> setForm(f=>cleanupByType(f)), [form.nptType]).
+
+Bulk Grid: In column defs use per-row editable predicate:
+
+Example (AG Grid):
+editable: (p) => enabledFields(p.data.nptType).equipment (similarly for each column).
+Add onCellValueChanged hook: when field === 'nptType' → apply cleanupByType to that row and update.
+
+Show inline hints:
+
+Contractual ⇒ “Equipment/Failure/Cause fields are locked.”
+
+Abraj ⇒ “Contractual Process is locked.”
+
+Return diffs for files changed and screenshots demonstrating that disabled cells cannot be edited.
+
+Phase 3 — Validations (Frontend + Backend)
+Frontend Zod: add superRefine with:
+
+Contractual ⇒ contractualProcess required.
+
+Abraj ⇒ require equipment, thePart, failureDesc, rootCause, corrective, futureAction, actionParty.
+
+needsN2(department, hours) ⇒ n2Number required.
+
+needsInvestigationReport(hours) ⇒ require either investigationFileId or investigationAiText.
+
+Backend schema: same rules + transform using cleanupByType to wipe disabled fields before persisting.
+
+Error shape: return { errors: { field: [message] } } so UI can show field-level toasts.
+
+Return the updated schema files with full code blocks.
+
+Phase 4 — Duplicate/Mismatch Kill
+Show a list of files still containing hard-coded logic for these rules (if any) and replace them with imports from shared/nptRules.ts.
+
+Ensure both single and bulk forms import the same functions.
+
+Confirm there isn’t a second bulk grid (another page) using old logic. If found, align it.
+
+Phase 5 — Tests & Proof
+Unit-like checks (print results):
+
+For each (type, department, hours) matrix, log enabledFields, needsN2, needsInvestigationReport.
+
+Manual e2e script (describe):
+
+Contractual ⇒ only System + Contractual Process editable; others locked.
+
+Abraj ⇒ group editable; Contractual Process locked.
+
+N2 required for (D&P, 3.75–5.75) & (M/E, 2.0–5.75).
+
+Investigation required at ≥ 6.0.
+
+Provide screenshots of single + bulk forms showing disabled inputs and failing validation when requirements not met.
+
+Rules of engagement
+Before editing, deliver Phase 0 outputs.
+
+After each phase, summarize changes + show diffs (file paths + unified diffs).
+
+If anything is ambiguous (e.g., grid library), ask 3 pointed questions and pause.
+
+Never create new duplicate rule files; always import from shared/nptRules.ts.
+
+Acceptance Criteria (I will verify)
+One shared rules file used by all forms and the backend.
+
+Disabled fields truly non-editable in bulk grid and single form (cursor/UX and value cannot change).
+
+Server enforces rules even if UI fails.
+
+N2 and Investigation conditions exactly match the intervals above.
+
+Clear error messages per field, and screenshots proving behavior.
+
+Communication
+Reply with PHASE 0 artifacts first.
+
+After my OK, proceed sequentially.
+
+If you change more files than listed, explain why and show diffs.
+
