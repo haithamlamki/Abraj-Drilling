@@ -1,0 +1,246 @@
+Why it still isn’t working
+From your screenshots, the grid still allows editing fields that should be locked. Typical causes:
+
+The UI never reads a rule function to decide if a cell is editable.
+
+Bulk grid columns don’t use a per-row editable predicate.
+
+Server schema doesn’t normalize/validate, so even if UI is wrong, bad data slips through.
+
+N2 rule implemented with the wrong thresholds (e.g., ≥4 instead of the exact intervals).
+
+Below is a minimal, drop-in implementation that fixes all four.
+
+1) Shared rules (single source of truth)
+Create/Update: shared/nptRules.ts
+
+ts
+Copy code
+export const NPT_TYPES = { CONTRACTUAL: "Contractual", ABRAJ: "Abraj" } as const;
+export const DEPARTMENTS = {
+  DRILLING_PROJECT: "Drilling & Project",
+  MAINTENANCE_ME: "Maintenance (M/E)",
+} as const;
+
+export type NptType = typeof NPT_TYPES[keyof typeof NPT_TYPES];
+
+export const isContractual = (t?: string) => t === NPT_TYPES.CONTRACTUAL;
+export const isAbraj       = (t?: string) => t === NPT_TYPES.ABRAJ;
+
+/** Hours windows are inclusive */
+export function needsN2(dept?: string, hrs?: number) {
+  if (hrs == null) return false;
+  if (dept === DEPARTMENTS.DRILLING_PROJECT) return hrs >= 3.75 && hrs <= 5.75;
+  if (dept === DEPARTMENTS.MAINTENANCE_ME)   return hrs >= 2.0  && hrs <= 5.75;
+  return false;
+}
+export const needsInvestigationReport = (hrs?: number) => (hrs ?? 0) >= 6.0;
+
+/** Per NPT type, which fields are enabled (true = editable) */
+export function enabledFields(nptType?: string) {
+  const c = isContractual(nptType);
+  const a = isAbraj(nptType);
+  return {
+    system: true,                         // always editable
+    contractualProcess: c,                // editable ONLY for Contractual
+    // equipment/failure/cause group:
+    equipment: a,
+    thePart: a,
+    failureDesc: a,
+    rootCause: a,
+    corrective: a,
+    futureAction: a,
+    actionParty: a,
+    // N2 is editable always, but required only by hours/department
+    n2Number: true,
+  } as const;
+}
+
+/** When type changes, blank the now-disabled fields to keep payload clean */
+export function cleanupByType<T extends Record<string, any>>(row: T): T {
+  const e = enabledFields(row.nptType);
+  const out = { ...row };
+  if (!e.contractualProcess) out.contractualProcess = "";
+  if (!e.equipment) {
+    out.equipment = ""; out.thePart = "";
+    out.failureDesc = ""; out.rootCause = "";
+    out.corrective = ""; out.futureAction = "";
+    out.actionParty = "";
+  }
+  return out;
+}
+2) Single form — actually lock the inputs
+tsx
+Copy code
+import { useMemo, useEffect } from "react";
+import { enabledFields, cleanupByType, needsN2, needsInvestigationReport } from "@/shared/nptRules";
+
+const ef = useMemo(() => enabledFields(form.nptType), [form.nptType]);
+
+useEffect(() => { setForm(f => cleanupByType(f)); }, [form.nptType]);
+
+<Input value={form.system} onChange={...} disabled={!ef.system} />
+<Input value={form.contractualProcess} onChange={...} disabled={!ef.contractualProcess} />
+
+{/* Group fields */}
+<Input value={form.equipment} onChange={...} disabled={!ef.equipment} />
+<Input value={form.thePart} onChange={...} disabled={!ef.thePart} />
+<Input value={form.failureDesc} onChange={...} disabled={!ef.failureDesc} />
+<Input value={form.rootCause} onChange={...} disabled={!ef.rootCause} />
+<Input value={form.corrective} onChange={...} disabled={!ef.corrective} />
+<Input value={form.futureAction} onChange={...} disabled={!ef.futureAction} />
+<Select value={form.actionParty} onChange={...} disabled={!ef.actionParty} />
+
+{/* N2 + Investigation */}
+<Input value={form.n2Number} onChange={...} />
+<FileUpload ... />
+<Textarea value={form.investigationAiText} onChange={...} />
+
+{/* Inline hints */}
+{isContractual(form.nptType) && <small>Equipment/Failure/Cause are locked for Contractual.</small>}
+{isAbraj(form.nptType) && <small>Contractual Process is locked for Abraj.</small>}
+3) Bulk grid — make columns use a per-row editable predicate
+Adjust for your grid library:
+
+AG Grid: editable: (p) => enabledFields(p.data.nptType).equipment
+
+React Data Grid / MUI DataGrid: similar predicate or custom cell editor.
+
+Example (AG Grid):
+
+ts
+Copy code
+const cols = [
+  { field: "system", editable: () => true },
+  { field: "contractualProcess", editable: (p) => enabledFields(p.data.nptType).contractualProcess },
+  { field: "equipment", editable: (p) => enabledFields(p.data.nptType).equipment },
+  { field: "thePart", editable: (p) => enabledFields(p.data.nptType).thePart },
+  { field: "failureDesc", editable: (p) => enabledFields(p.data.nptType).failureDesc },
+  { field: "rootCause", editable: (p) => enabledFields(p.data.nptType).rootCause },
+  { field: "corrective", editable: (p) => enabledFields(p.data.nptType).corrective },
+  { field: "futureAction", editable: (p) => enabledFields(p.data.nptType).futureAction },
+  { field: "actionParty", editable: (p) => enabledFields(p.data.nptType).actionParty },
+  { field: "n2Number", editable: () => true },
+];
+On NPT Type change (in bulk grid):
+
+ts
+Copy code
+function onCellValueChanged({ data, colDef }) {
+  if (colDef.field === "nptType") {
+    const cleaned = cleanupByType(data);
+    gridApi.applyTransaction({ update: [cleaned] });
+  }
+}
+4) Validation (frontend Zod)
+ts
+Copy code
+import { z } from "zod";
+import { isContractual, isAbraj, needsN2, needsInvestigationReport } from "@/shared/nptRules";
+
+export const nptEntrySchema = z.object({
+  nptType: z.string().min(1),
+  system: z.string().min(1),
+  hours: z.number().min(0).max(24),
+  department: z.string().min(1),
+
+  contractualProcess: z.string().optional(),
+  equipment: z.string().optional(),
+  thePart: z.string().optional(),
+  failureDesc: z.string().optional(),
+  rootCause: z.string().optional(),
+  corrective: z.string().optional(),
+  futureAction: z.string().optional(),
+  actionParty: z.string().optional(),
+
+  n2Number: z.string().optional(),
+  investigationFileId: z.string().optional(),
+  investigationAiText: z.string().optional(),
+})
+.superRefine((v, ctx) => {
+  if (isContractual(v.nptType) && !v.contractualProcess?.trim())
+    ctx.addIssue({ code:"custom", path:["contractualProcess"], message:"Contractual Process is required for Contractual." });
+
+  if (isAbraj(v.nptType)) {
+    (["equipment","thePart","failureDesc","rootCause","corrective","futureAction","actionParty"] as const)
+      .forEach(k => { if (!v[k]?.toString().trim())
+        ctx.addIssue({ code:"custom", path:[k], message:"Required for Abraj." });
+      });
+  }
+
+  if (needsN2(v.department, v.hours) && !v.n2Number?.toString().trim())
+    ctx.addIssue({ code:"custom", path:["n2Number"], message:"N2 is required for this hours range." });
+
+  if (needsInvestigationReport(v.hours)) {
+    const hasFile = !!v.investigationFileId?.trim();
+    const hasAi   = !!v.investigationAiText?.trim();
+    if (!hasFile && !hasAi)
+      ctx.addIssue({ code:"custom", path:["investigationFileId"], message:"Investigation report (file or AI) is required for ≥ 6.0h." });
+  }
+});
+5) Server schema — normalize + enforce (safety net)
+server/schemas/npt.ts
+
+ts
+Copy code
+import { z } from "zod";
+import { isContractual, isAbraj, needsN2, needsInvestigationReport, cleanupByType } from "../../shared/nptRules";
+
+export const serverNptSchema = z.object({
+  nptType: z.string(),
+  system: z.string(),
+  hours: z.number(),
+  department: z.string(),
+  contractualProcess: z.string().optional(),
+  equipment: z.string().optional(),
+  thePart: z.string().optional(),
+  failureDesc: z.string().optional(),
+  rootCause: z.string().optional(),
+  corrective: z.string().optional(),
+  futureAction: z.string().optional(),
+  actionParty: z.string().optional(),
+  n2Number: z.string().optional(),
+  investigationFileId: z.string().optional(),
+  investigationAiText: z.string().optional(),
+})
+.transform(v => cleanupByType(v))
+.superRefine((v, ctx) => {
+  if (isContractual(v.nptType) && !v.contractualProcess?.trim())
+    ctx.addIssue({ code:"custom", path:["contractualProcess"], message:"Contractual Process is required for Contractual." });
+
+  if (isAbraj(v.nptType)) {
+    (["equipment","thePart","failureDesc","rootCause","corrective","futureAction","actionParty"] as const)
+      .forEach(k => { if (!v[k]?.toString().trim())
+        ctx.addIssue({ code:"custom", path:[k], message:"Required for Abraj." });
+      });
+  }
+
+  if (needsN2(v.department, v.hours) && !v.n2Number?.toString().trim())
+    ctx.addIssue({ code:"custom", path:["n2Number"], message:"N2 is required for this hours range." });
+
+  if (needsInvestigationReport(v.hours)) {
+    const hasFile = !!v.investigationFileId?.trim();
+    const hasAi   = !!v.investigationAiText?.trim();
+    if (!hasFile && !hasAi)
+      ctx.addIssue({ code:"custom", path:["investigationFileId"], message:"Investigation report (file or AI) is required for ≥ 6.0h." });
+  }
+});
+In your route:
+
+ts
+Copy code
+const parsed = serverNptSchema.safeParse(req.body);
+if (!parsed.success) return res.status(400).json({ errors: parsed.error.flatten().fieldErrors });
+const data = parsed.data; // normalized + validated
+6) Verify in 90 seconds
+Contractual: only System + Contractual Process editable; others disabled; submit requires Contractual Process.
+
+Abraj: Contractual Process disabled; Equipment/Failure/Cause required.
+
+N2 required at 3.75–5.75 (Drilling & Project) and 2.0–5.75 (Maintenance M/E).
+
+Investigation required once Hours ≥ 6.0 (either file or AI text).
+
+In bulk grid, try to edit a disabled cell → it should refuse (cursor/UX); changing NPT Type should immediately blank disabled fields.
+
+If anything still doesn’t flip in the grid, tell me which grid library you use (AG Grid / MUI DataGrid / React Data Grid), and I’ll paste the exact column config for that library.

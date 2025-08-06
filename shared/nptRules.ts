@@ -22,6 +22,45 @@ export function needsN2(dept?: string, hrs?: number) {
 
 export const needsInvestigationReport = (hrs?: number) => (hrs ?? 0) >= 6.0;
 
+/** Per NPT type, which fields are enabled (true = editable) */
+export function enabledFields(nptType?: string) {
+  const c = isContractual(nptType);
+  const a = isAbraj(nptType);
+  return {
+    system: true,                         // always editable
+    contractualProcess: c,                // editable ONLY for Contractual
+    // equipment/failure/cause group:
+    equipment: a,
+    thePart: a,
+    failureDesc: a,
+    rootCause: a,
+    corrective: a,
+    futureAction: a,
+    actionParty: a,
+    // N2 is editable always, but required only by hours/department
+    n2Number: true,
+  } as const;
+}
+
+/** When type changes, blank the now-disabled fields to keep payload clean */
+export function cleanupByType<T extends Record<string, any>>(row: T): T {
+  const e = enabledFields(row.nptType);
+  const out = { ...row };
+  if (!e.contractualProcess && 'contractualProcess' in out) {
+    (out as any).contractualProcess = "";
+  }
+  if (!e.equipment && 'equipment' in out) {
+    if ('equipment' in out) (out as any).equipment = "";
+    if ('thePart' in out) (out as any).thePart = "";
+    if ('failureDesc' in out) (out as any).failureDesc = "";
+    if ('rootCause' in out) (out as any).rootCause = "";
+    if ('corrective' in out) (out as any).corrective = "";
+    if ('futureAction' in out) (out as any).futureAction = "";
+    if ('actionParty' in out) (out as any).actionParty = "";
+  }
+  return out;
+}
+
 // Helper functions for UI feedback
 export const getDisabledFieldsHelp = (nptType?: string) => {
   if (isContractual(nptType)) {

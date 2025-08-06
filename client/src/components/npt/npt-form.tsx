@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -8,7 +8,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { insertNptReportSchema } from "@shared/schema";
 import { nptEntrySchema } from "@/validation/nptEntry";
-import { isContractual, isAbraj, needsN2, needsInvestigationReport, getDisabledFieldsHelp, getN2RequirementHelp, getInvestigationRequirementHelp, DEPARTMENTS } from "@shared/nptRules";
+import { isContractual, isAbraj, needsN2, needsInvestigationReport, enabledFields, cleanupByType, getDisabledFieldsHelp, getN2RequirementHelp, getInvestigationRequirementHelp, DEPARTMENTS } from "@shared/nptRules";
 import { z } from "zod";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -118,6 +118,9 @@ export default function NptForm() {
   const [selectedNptType, setSelectedNptType] = useState<string>("");
   const [selectedDepartment, setSelectedDepartment] = useState<string>("");
   const [selectedHours, setSelectedHours] = useState<number>(0);
+  
+  // Memoize enabled fields based on current NPT type
+  const enabledFieldsState = useMemo(() => enabledFields(selectedNptType), [selectedNptType]);
   const [billingData, setBillingData] = useState<BillingSheetRow | null>(null);
   
   // Get edit parameter from URL
@@ -449,20 +452,16 @@ export default function NptForm() {
     setSelectedDepartment(watchedDepartment);
     setSelectedHours(watchedHours);
     
-    // Clear disabled fields when NPT type changes
-    if (isContractual(watchedNptType)) {
-      // Clear equipment/failure/cause fields for Contractual
-      form.setValue("parentEquipment", "");
-      form.setValue("partEquipment", "");
-      form.setValue("immediateCause", "");
-      form.setValue("rootCause", "");
-      form.setValue("correctiveAction", "");
-      form.setValue("futureAction", "");
-      form.setValue("actionParty", "");
-    } else if (isAbraj(watchedNptType)) {
-      // Clear contractual process for Abraj
-      form.setValue("contractualProcess", "");
-    }
+    // Apply field cleanup when NPT type changes
+    const formValues = form.getValues();
+    const cleanedValues = cleanupByType({ ...formValues, nptType: watchedNptType });
+    
+    // Update form with cleaned values
+    Object.keys(cleanedValues).forEach((key) => {
+      if (key !== 'nptType') {
+        form.setValue(key as any, cleanedValues[key as keyof typeof cleanedValues]);
+      }
+    });
   }, [watchedNptType, watchedDepartment, watchedHours]);
 
   // Calculate field states
@@ -673,11 +672,11 @@ export default function NptForm() {
                         <Select 
                           onValueChange={field.onChange} 
                           value={field.value || ''} 
-                          disabled={selectedNptType !== 'Abraj'}
+                          disabled={!enabledFieldsState.system}
                           data-testid="select-system"
                         >
                           <FormControl>
-                            <SelectTrigger className={`h-8 text-xs border-0 rounded-none ${selectedNptType !== 'Abraj' ? 'bg-gray-100 opacity-50' : ''}`}>
+                            <SelectTrigger className={`h-8 text-xs border-0 rounded-none ${!enabledFieldsState.system ? 'bg-gray-100 opacity-50' : ''}`}>
                               <SelectValue placeholder="Select" />
                             </SelectTrigger>
                           </FormControl>
@@ -702,11 +701,11 @@ export default function NptForm() {
                         <Select 
                           onValueChange={field.onChange} 
                           value={field.value || ''} 
-                          disabled={selectedNptType !== 'Abraj'}
+                          disabled={!enabledFieldsState.equipment}
                           data-testid="select-parent-equipment"
                         >
                           <FormControl>
-                            <SelectTrigger className={`h-8 text-xs border-0 rounded-none ${selectedNptType !== 'Abraj' ? 'bg-gray-100 opacity-50' : ''}`}>
+                            <SelectTrigger className={`h-8 text-xs border-0 rounded-none ${!enabledFieldsState.equipment ? 'bg-gray-100 opacity-50' : ''}`}>
                               <SelectValue placeholder="Select" />
                             </SelectTrigger>
                           </FormControl>
@@ -733,8 +732,8 @@ export default function NptForm() {
                             placeholder="Part"
                             {...field}
                             value={field.value || ''}
-                            disabled={selectedNptType !== 'Abraj'}
-                            className={`h-8 text-xs border-0 rounded-none ${selectedNptType !== 'Abraj' ? 'bg-gray-100 opacity-50' : ''}`}
+                            disabled={!enabledFieldsState.thePart}
+                            className={`h-8 text-xs border-0 rounded-none ${!enabledFieldsState.thePart ? 'bg-gray-100 opacity-50' : ''}`}
                             data-testid="input-part-equipment"
                           />
                         </FormControl>
@@ -753,8 +752,8 @@ export default function NptForm() {
                             placeholder="Process"
                             {...field}
                             value={field.value || ''}
-                            disabled={selectedNptType !== 'Contractual'}
-                            className={`h-8 text-xs border-0 rounded-none ${selectedNptType !== 'Contractual' ? 'bg-gray-100 opacity-50' : ''}`}
+                            disabled={!enabledFieldsState.contractualProcess}
+                            className={`h-8 text-xs border-0 rounded-none ${!enabledFieldsState.contractualProcess ? 'bg-gray-100 opacity-50' : ''}`}
                             data-testid="input-contractual-process"
                           />
                         </FormControl>
@@ -802,8 +801,8 @@ export default function NptForm() {
                             placeholder="Description"
                             {...field}
                             value={field.value || ''}
-                            disabled={selectedNptType !== 'Abraj'}
-                            className={`h-8 text-xs border-0 rounded-none ${selectedNptType !== 'Abraj' ? 'bg-gray-100 opacity-50' : ''}`}
+                            disabled={!enabledFieldsState.failureDesc}
+                            className={`h-8 text-xs border-0 rounded-none ${!enabledFieldsState.failureDesc ? 'bg-gray-100 opacity-50' : ''}`}
                             data-testid="input-immediate-cause"
                           />
                         </FormControl>
@@ -822,8 +821,8 @@ export default function NptForm() {
                             placeholder="Root Cause"
                             {...field}
                             value={field.value || ''}
-                            disabled={selectedNptType !== 'Abraj'}
-                            className={`h-8 text-xs border-0 rounded-none ${selectedNptType !== 'Abraj' ? 'bg-gray-100 opacity-50' : ''}`}
+                            disabled={!enabledFieldsState.rootCause}
+                            className={`h-8 text-xs border-0 rounded-none ${!enabledFieldsState.rootCause ? 'bg-gray-100 opacity-50' : ''}`}
                             data-testid="input-root-cause"
                           />
                         </FormControl>
@@ -842,8 +841,8 @@ export default function NptForm() {
                             placeholder="Corrective"
                             {...field}
                             value={field.value || ''}
-                            disabled={selectedNptType !== 'Abraj'}
-                            className={`h-8 text-xs border-0 rounded-none ${selectedNptType !== 'Abraj' ? 'bg-gray-100 opacity-50' : ''}`}
+                            disabled={!enabledFieldsState.corrective}
+                            className={`h-8 text-xs border-0 rounded-none ${!enabledFieldsState.corrective ? 'bg-gray-100 opacity-50' : ''}`}
                             data-testid="input-corrective-action"
                           />
                         </FormControl>
@@ -862,8 +861,8 @@ export default function NptForm() {
                             placeholder="Future Action"
                             {...field}
                             value={field.value || ''}
-                            disabled={selectedNptType !== 'Abraj'}
-                            className={`h-8 text-xs border-0 rounded-none ${selectedNptType !== 'Abraj' ? 'bg-gray-100 opacity-50' : ''}`}
+                            disabled={!enabledFieldsState.futureAction}
+                            className={`h-8 text-xs border-0 rounded-none ${!enabledFieldsState.futureAction ? 'bg-gray-100 opacity-50' : ''}`}
                             data-testid="input-future-action"
                           />
                         </FormControl>
@@ -880,11 +879,11 @@ export default function NptForm() {
                         <Select 
                           onValueChange={field.onChange} 
                           value={field.value || ''} 
-                          disabled={selectedNptType !== 'Abraj'}
+                          disabled={!enabledFieldsState.actionParty}
                           data-testid="select-action-party"
                         >
                           <FormControl>
-                            <SelectTrigger className={`h-8 text-xs border-0 rounded-none ${selectedNptType !== 'Abraj' ? 'bg-gray-100 opacity-50' : ''}`}>
+                            <SelectTrigger className={`h-8 text-xs border-0 rounded-none ${!enabledFieldsState.actionParty ? 'bg-gray-100 opacity-50' : ''}`}>
                               <SelectValue placeholder="Select" />
                             </SelectTrigger>
                           </FormControl>

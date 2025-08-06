@@ -13,6 +13,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
+import { enabledFields, cleanupByType } from "@shared/nptRules";
 import type { BillingSheetRow } from "@shared/billingTypes";
 
 const nptRowSchema = z.object({
@@ -266,6 +267,9 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
                   {rows.map((row, index) => {
                     if (removedRows.includes(index)) return null;
                     
+                    // Calculate enabled fields for this row based on NPT type
+                    const enabledFieldsState = enabledFields({ nptType: row.nptType });
+                    
                     return (
                       <tr key={index} className="bg-white border-b border-gray-200">
                         {/* Rig Number (A) */}
@@ -373,9 +377,13 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
                             name={`rows.${index}.system`}
                             render={({ field }) => (
                               <FormItem>
-                                <Select onValueChange={field.onChange} value={field.value || undefined}>
+                                <Select 
+                                  onValueChange={field.onChange} 
+                                  value={field.value || undefined}
+                                  disabled={!enabledFieldsState.system}
+                                >
                                   <FormControl>
-                                    <SelectTrigger className="h-8 text-xs border-0 rounded-none">
+                                    <SelectTrigger className={`h-8 text-xs border-0 rounded-none ${!enabledFieldsState.system ? 'bg-gray-100 opacity-50' : ''}`}>
                                       <SelectValue placeholder="Select..." />
                                     </SelectTrigger>
                                   </FormControl>
@@ -399,9 +407,13 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
                             name={`rows.${index}.equipment`}
                             render={({ field }) => (
                               <FormItem>
-                                <Select onValueChange={field.onChange} value={field.value || undefined}>
+                                <Select 
+                                  onValueChange={field.onChange} 
+                                  value={field.value || undefined}
+                                  disabled={!enabledFieldsState.equipment}
+                                >
                                   <FormControl>
-                                    <SelectTrigger className="h-8 text-xs border-0 rounded-none">
+                                    <SelectTrigger className={`h-8 text-xs border-0 rounded-none ${!enabledFieldsState.equipment ? 'bg-gray-100 opacity-50' : ''}`}>
                                       <SelectValue placeholder="Select..." />
                                     </SelectTrigger>
                                   </FormControl>
@@ -426,7 +438,11 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
                             render={({ field }) => (
                               <FormItem>
                                 <FormControl>
-                                  <Input {...field} className="h-8 text-xs border-0 rounded-none" />
+                                  <Input 
+                                    {...field} 
+                                    disabled={!enabledFieldsState.thePart}
+                                    className={`h-8 text-xs border-0 rounded-none ${!enabledFieldsState.thePart ? 'bg-gray-100 opacity-50' : ''}`} 
+                                  />
                                 </FormControl>
                               </FormItem>
                             )}
@@ -441,7 +457,11 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
                             render={({ field }) => (
                               <FormItem>
                                 <FormControl>
-                                  <Input {...field} className="h-8 text-xs border-0 rounded-none" />
+                                  <Input 
+                                    {...field} 
+                                    disabled={!enabledFieldsState.contractualProcess}
+                                    className={`h-8 text-xs border-0 rounded-none ${!enabledFieldsState.contractualProcess ? 'bg-gray-100 opacity-50' : ''}`} 
+                                  />
                                 </FormControl>
                               </FormItem>
                             )}
@@ -482,7 +502,11 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
                             render={({ field }) => (
                               <FormItem>
                                 <FormControl>
-                                  <Input {...field} className="h-8 text-xs border-0 rounded-none" />
+                                  <Input 
+                                    {...field} 
+                                    disabled={!enabledFieldsState.failureDesc}
+                                    className={`h-8 text-xs border-0 rounded-none ${!enabledFieldsState.failureDesc ? 'bg-gray-100 opacity-50' : ''}`} 
+                                  />
                                 </FormControl>
                               </FormItem>
                             )}
@@ -497,7 +521,11 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
                             render={({ field }) => (
                               <FormItem>
                                 <FormControl>
-                                  <Input {...field} className="h-8 text-xs border-0 rounded-none" />
+                                  <Input 
+                                    {...field} 
+                                    disabled={!enabledFieldsState.rootCause}
+                                    className={`h-8 text-xs border-0 rounded-none ${!enabledFieldsState.rootCause ? 'bg-gray-100 opacity-50' : ''}`} 
+                                  />
                                 </FormControl>
                               </FormItem>
                             )}
@@ -512,7 +540,11 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
                             render={({ field }) => (
                               <FormItem>
                                 <FormControl>
-                                  <Input {...field} className="h-8 text-xs border-0 rounded-none" />
+                                  <Input 
+                                    {...field} 
+                                    disabled={!enabledFieldsState.corrective}
+                                    className={`h-8 text-xs border-0 rounded-none ${!enabledFieldsState.corrective ? 'bg-gray-100 opacity-50' : ''}`} 
+                                  />
                                 </FormControl>
                               </FormItem>
                             )}
@@ -527,7 +559,11 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
                             render={({ field }) => (
                               <FormItem>
                                 <FormControl>
-                                  <Input {...field} className="h-8 text-xs border-0 rounded-none" />
+                                  <Input 
+                                    {...field} 
+                                    disabled={!enabledFieldsState.futureAction}
+                                    className={`h-8 text-xs border-0 rounded-none ${!enabledFieldsState.futureAction ? 'bg-gray-100 opacity-50' : ''}`} 
+                                  />
                                 </FormControl>
                               </FormItem>
                             )}
@@ -541,9 +577,13 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
                             name={`rows.${index}.actionParty`}
                             render={({ field }) => (
                               <FormItem>
-                                <Select onValueChange={field.onChange} value={field.value || undefined}>
+                                <Select 
+                                  onValueChange={field.onChange} 
+                                  value={field.value || undefined}
+                                  disabled={!enabledFieldsState.actionParty}
+                                >
                                   <FormControl>
-                                    <SelectTrigger className="h-8 text-xs border-0 rounded-none">
+                                    <SelectTrigger className={`h-8 text-xs border-0 rounded-none ${!enabledFieldsState.actionParty ? 'bg-gray-100 opacity-50' : ''}`}>
                                       <SelectValue placeholder="Select..." />
                                     </SelectTrigger>
                                   </FormControl>
