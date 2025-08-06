@@ -17,6 +17,7 @@ import Reports from "@/pages/reports";
 import MonthlyReports from "@/pages/monthly-reports";
 import MonthlyTimeline from "@/pages/monthly-timeline";
 import NotFound from "@/pages/not-found";
+import { useEffect } from "react";
 
 function Router() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -46,6 +47,28 @@ function Router() {
 }
 
 function App() {
+  // Global error handler for unhandled promise rejections
+  useEffect(() => {
+    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      console.error('Unhandled promise rejection:', event.reason);
+      
+      // Check if it's an API error
+      if (event.reason?.message?.includes('401')) {
+        console.log('Unauthorized error detected, redirecting to login...');
+        window.location.href = '/api/login';
+      }
+      
+      // Prevent the error from being logged to the console again
+      event.preventDefault();
+    };
+
+    window.addEventListener('unhandledrejection', handleUnhandledRejection);
+    
+    return () => {
+      window.removeEventListener('unhandledrejection', handleUnhandledRejection);
+    };
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>

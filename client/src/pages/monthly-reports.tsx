@@ -69,13 +69,14 @@ export default function MonthlyReports() {
   // Fetch monthly reports
   const { data: reports = [] } = useQuery<MonthlyReport[]>({
     queryKey: ['/api/monthly-reports', selectedRig, selectedStatus, selectedMonth],
-    queryFn: () => {
+    queryFn: async () => {
       const params = new URLSearchParams();
       if (selectedRig && selectedRig !== 'all') params.append('rigId', selectedRig);
       if (selectedStatus && selectedStatus !== 'all') params.append('status', selectedStatus);
       if (selectedMonth) params.append('month', selectedMonth);
       
-      return apiRequest(`/api/monthly-reports?${params.toString()}`);
+      const response = await apiRequest('GET', `/api/monthly-reports?${params.toString()}`);
+      return response.json();
     }
   });
 
@@ -87,10 +88,11 @@ export default function MonthlyReports() {
   // Fetch KPIs
   const { data: kpis } = useQuery<KPIs>({
     queryKey: ['/api/lifecycle/kpis', selectedRig],
-    queryFn: () => {
+    queryFn: async () => {
       const params = new URLSearchParams();
       if (selectedRig && selectedRig !== 'all') params.append('rigId', selectedRig);
-      return apiRequest(`/api/lifecycle/kpis?${params.toString()}`);
+      const response = await apiRequest('GET', `/api/lifecycle/kpis?${params.toString()}`);
+      return response.json();
     }
   });
 
