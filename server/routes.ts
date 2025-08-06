@@ -1745,6 +1745,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Include workflow management routes
   app.use(workflowRouter);
 
+  // Import and register workflow routes
+  const workflowRoutes = await import("./routes/workflows.js");
+  app.use(workflowRoutes.default);
+  
+  // Seed workflow data endpoint (for admin testing)
+  app.post('/api/admin/seed-workflows', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const currentUser = await storage.getUser(userId);
+      
+      if (currentUser?.role !== 'admin') {
+        return res.status(403).json({ message: "Only admins can seed data" });
+      }
+      
+      const { seedWorkflowData } = await import('./scripts/seedWorkflowData.js');
+      const result = await seedWorkflowData();
+      res.json({ success: true, ...result });
+    } catch (error) {
+      console.error('Error seeding workflows:', error);
+      res.status(500).json({ error: 'Failed to seed workflow data' });
+    }
+  });
+
+  // Backfill routing endpoint (for admin testing)
+  app.post('/api/admin/backfill-routing', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const currentUser = await storage.getUser(userId);
+      
+      if (currentUser?.role !== 'admin') {
+        return res.status(403).json({ message: "Only admins can backfill data" });
+      }
+      
+      const { backfillRouting } = await import('./scripts/backfillRouting.js');
+      const result = await backfillRouting();
+      res.json({ success: true, ...result });
+    } catch (error) {
+      console.error('Error backfilling routing:', error);
+      res.status(500).json({ error: 'Failed to backfill routing' });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

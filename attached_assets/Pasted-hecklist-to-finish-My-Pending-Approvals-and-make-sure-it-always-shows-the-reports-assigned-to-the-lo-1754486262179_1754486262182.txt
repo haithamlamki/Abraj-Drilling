@@ -1,0 +1,112 @@
+hecklist to finish My Pending Approvals and make sure it always shows the reports assigned to the logged-in user.
+
+1) API (return items waiting on me)
+File: server/routes/approvals.ts
+
+ts
+Copy code
+// GET: reports the current user must act on
+router.get("/api/my-approvals/pending", async (req, res) => {
+  const userId = req.user?.id;
+  if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+  const items = await prisma.npt_entries.findMany({
+    where: {
+      status: NPT_STATUS.PENDING_REVIEW,
+      current_approver_user_id: userId,
+    },
+    orderBy: { date: "desc" },
+    select: {
+      id: true, date: true, hours: true, npt_type: true, status: true,
+      rig: { select: { name: true } },
+      submittedBy: { select: { name: true } },
+      current_step_order: true,
+    }
+  });
+
+  res.json({ items });
+});
+
+// Optional: my approval history (what I approved/rejected)
+router.get("/api/my-approvals/history", async (req, res) => {
+  const userId = req.user?.id;
+  if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+  const actions = await prisma.npt_approvals.findMany({
+    where: { approver_user_id: userId },
+    orderBy: { created_at: "desc" },
+    select: {
+      action: true, created_at: true, step_order: true,
+      report: {
+        select: {
+          id: true, date: true, hours: true, npt_type: true, status: true,
+          rig: { select: { name: true } },
+        }
+      }
+    }
+  });
+  res.json({ actions });
+});
+Make sure app.use(approvalsRouter) is mounted and req.user is populated by your auth middleware.
+
+2) Ensure routing pointer is set on submit
+When an NPT is submitted (status = PENDING_REVIEW), call your router:
+
+ts
+Copy code
+await routeFirstApprover(created.id); // sets current_approver_user_id
+If this isn’t being called, the page will stay empty.
+
+3) Frontend wiring for /pending-approvals
+File: client/src/pages/pending-approvals.tsx
+
+tsx
+Copy code
+import useSWR from "swr";
+import { apiFetch } from "@/lib/queryClient";
+
+const { data, error, isLoading } = useSWR("/api/my-approvals/pending", (u)=>apiFetch(u));
+// data?.items => rows for the current user
+
+// Approve action example:
+await apiFetch(`/api/approvals/${id}/approve`, { method: "POST", data: { comment } });
+mutate("/api/my-approvals/pending"); // refresh list
+Render columns: Date | Rig | NPT Type | Hours | Status | Submitted By | Actions.
+
+Tabs:
+
+Pending: /api/my-approvals/pending
+
+Approved/Rejected: use /api/my-approvals/history and filter client-side by action.
+
+4) Quick seed (so the page isn’t empty)
+File: server/scripts/seed-approvals.ts
+
+Create role assignments for Rig 104 (toolpusher → John, e_maintenance → Sarah, ds → Haitham Supervisor, osc → PME 103).
+
+Create two PENDING_REVIEW NPT rows on Rig 104.
+
+Call routeFirstApprover for each.
+
+Run once (e.g., ts-node server/scripts/seed-approvals.ts).
+
+5) Sanity checks (do these)
+DB check: each pending row has status = PENDING_REVIEW and current_approver_user_id = <myUserId>.
+
+Auth check: req.user.id is not null.
+
+UI check: apiFetch is called with URL first (not passed as method).
+
+Counters: if you show counts on the page, base them on the same API or on current_approver_user_id = me.
+
+6) Typical fixes if still empty
+Pointer not set: call routeFirstApprover(id) on submit; confirm role assignments exist for the rig.
+
+Wrong status string: ensure you use the constant PENDING_REVIEW everywhere (DB/API/UI).
+
+Delegation active: if there’s a delegation, the pending item will show for the delegate, not the original approver—log in as the right user.
+
+7) Nice-to-have (fast)
+Show “Waiting on: Name (delegated from X)” inside each row if current_nominal_user_id !== current_approver_user_id.
+
+Add “Open Workflow Admin” CTA when a row is Unassigned to jump straight to role assignments for that rig.

@@ -84,7 +84,7 @@ export const nptReports = pgTable("npt_reports", {
   notificationNumber: varchar("notification_number"),
   investigationReport: varchar("investigation_report"),
   wellName: varchar("well_name"),
-  status: varchar("status").default('Draft'), // Draft, Pending Review, Approved, Rejected
+  status: varchar("status").default('DRAFT'), // DRAFT, PENDING_REVIEW, APPROVED, REJECTED
   rejectionReason: text("rejection_reason"),
   // Enhanced workflow fields for delegation system
   currentStepOrder: integer("current_step_order"),
@@ -173,12 +173,12 @@ export const delegations = pgTable("delegations", {
 export const roleAssignments = pgTable("role_assignments", {
   id: serial("id").primaryKey(),
   rigId: integer("rig_id").references(() => rigs.id).notNull(),
-  roleKey: varchar("role_key").notNull(), // toolpusher, e_maintenance, ds, ose
+  roleKey: varchar("role_key").notNull(), // toolpusher, e_maintenance, ds, osc
   userId: varchar("user_id").references(() => users.id).notNull(),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
-  index("idx_role_assignments_rig_role").on(table.rigId, table.roleKey),
+  index("ux_role_assign").on(table.rigId, table.roleKey, table.userId),
   index("idx_role_assignments_user").on(table.userId),
 ]);
 

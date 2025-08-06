@@ -137,7 +137,7 @@ export default function WorkflowsAdmin() {
 
   const updateRoleAssignmentMutation = useMutation({
     mutationFn: async (data: { rigId: number; roleKey: string; userId: string }) =>
-      apiRequest("/api/role-assignments", { method: "POST", body: data }),
+      apiRequest("/api/role-assignments", { method: "PATCH", body: data }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/role-assignments"] });
       setRoleDialogOpen(false);

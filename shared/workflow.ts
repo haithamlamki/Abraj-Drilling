@@ -1,27 +1,15 @@
 // Workflow management constants and types
 
-export const ROLE_KEYS = [
-  'toolpusher',
-  'e_maintenance', 
-  'ds',
-  'ose'
-] as const;
-
+export const NPT_STATUS = { DRAFT:"DRAFT", PENDING_REVIEW:"PENDING_REVIEW", APPROVED:"APPROVED", REJECTED:"REJECTED" } as const;
+export const ROLE_KEYS = ["toolpusher","e_maintenance","ds","osc"] as const;
 export type RoleKey = typeof ROLE_KEYS[number];
 
 export const ROLE_LABELS: Record<RoleKey, string> = {
   toolpusher: 'Tool Pusher',
   e_maintenance: 'E-Maintenance', 
   ds: 'Drilling Supervisor',
-  ose: 'Operations Support Engineer'
+  osc: 'Operations Support Coordinator'
 };
-
-export const NPT_STATUS = {
-  DRAFT: 'Draft',
-  PENDING_REVIEW: 'Pending Review',
-  APPROVED: 'Approved',
-  REJECTED: 'Rejected'
-} as const;
 
 export type NptStatus = typeof NPT_STATUS[keyof typeof NPT_STATUS];
 

@@ -122,7 +122,7 @@ router.get("/api/role-assignments", isAuthenticated, async (req, res) => {
   }
 });
 
-router.post("/api/role-assignments", isAuthenticated, async (req, res) => {
+router.patch("/api/role-assignments", isAuthenticated, async (req, res) => {
   try {
     const { rigId, roleKey, userId } = req.body;
 
