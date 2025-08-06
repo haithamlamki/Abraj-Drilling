@@ -364,9 +364,44 @@ export const insertNptReportSchema = createInsertSchema(nptReports).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
+  year: true,  // Remove from required fields - will be derived server-side
+  month: true, // Remove from required fields - will be derived server-side
 }).extend({
   date: z.string().transform((val) => new Date(val)),
   hours: z.number().min(0).max(24),
+});
+
+// Server-side schema for processing with transformations
+export const serverNptReportSchema = insertNptReportSchema.transform((data) => {
+  const d = typeof data.date === "string" ? new Date(data.date) : data.date;
+  const snappedHours = Math.round(data.hours * 4) / 4; // Snap to quarter hours
+  
+  return {
+    ...data,
+    date: d,
+    hours: snappedHours,
+    year: d.getUTCFullYear(),
+    month: d.getUTCMonth() + 1,
+  };
+}).superRefine((val, ctx) => {
+  const isQuarter = (v: number) => Number.isFinite(v) && Math.round(v * 4) === v * 4;
+  
+  if (!isQuarter(val.hours)) {
+    ctx.addIssue({ 
+      code: z.ZodIssueCode.custom, 
+      path: ["hours"], 
+      message: "Hours must be in 0.25 steps" 
+    });
+  }
+  
+  // Conditional validation based on NPT type
+  if (val.nptType === "Contractual" && !val.contractualProcess?.trim()) {
+    ctx.addIssue({ 
+      code: z.ZodIssueCode.custom, 
+      path: ["contractualProcess"], 
+      message: "Contractual process is required for Contractual NPT" 
+    });
+  }
 });
 
 export const insertRigSchema = createInsertSchema(rigs).omit({

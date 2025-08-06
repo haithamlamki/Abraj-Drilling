@@ -1,0 +1,223 @@
+Below is a clean, step-by-step fix that (1) removes the year/month requirement from the request, (2) derives them from date server-side, and (3) standardizes quarter-hour validation across frontend + backend + DB. I’m writing this in your preferred “where/what/how to test” style.
+
+0) What we’ll achieve
+Request body only needs: rigId, date, hours, nptType, and any conditional fields.
+
+Server derives year, month, day from date, and snaps hours to nearest 0.25.
+
+Hours accepted range: 0–24, multiple of 0.25 (0, 0.25, 0.5, …).
+
+Errors returned as field-level messages (no more generic “Failed to create”).
+
+DB still enforces the quarter-hour check.
+
+1) Shared utilities (client & server)
+File: shared/time.ts (or src/lib/time.ts if you don’t have a shared folder)
+
+ts
+Copy code
+export const clamp = (v: number, min = 0, max = 24) => Math.max(min, Math.min(max, v));
+export const snapQuarter = (v: number) => Math.round(v * 4) / 4;
+export const isQuarter = (v: number) => Number.isFinite(v) && Math.round(v * 4) === v * 4;
+
+export const deriveYMD = (iso: string | Date) => {
+  const d = typeof iso === "string" ? new Date(iso) : iso;
+  // use UTC to avoid timezone shifts
+  return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate() };
+};
+2) Server schema: accept date, derive year/month/day
+Use Zod (shown). If you use Joi/Yup/class-validator, I added notes right after.
+
+File: server/schemas/npt.ts (or wherever your API validators live)
+
+ts
+Copy code
+import { z } from "zod";
+import { clamp, snapQuarter, isQuarter, deriveYMD } from "../../shared/time";
+
+export const nptCreateSchema = z.object({
+  rigId: z.number().int().positive(),
+  date: z.union([z.string().min(1), z.date()]),
+  hours: z.number().min(0).max(24),       // allow zero
+  nptType: z.string().min(1),             // keep broad; refine by business rules
+  contractualProcess: z.string().optional(),
+  // ... other optional fields (system, equipment, etc.)
+})
+.transform((data) => {
+  const d = typeof data.date === "string" ? new Date(data.date) : data.date;
+  const snappedHours = snapQuarter(clamp(data.hours, 0, 24));
+  const { year, month, day } = deriveYMD(d);
+
+  return {
+    ...data,
+    date: d.toISOString(), // normalize
+    hours: snappedHours,
+    year,
+    month,
+    day
+  };
+})
+.superRefine((val, ctx) => {
+  if (!isQuarter(val.hours)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["hours"], message: "Hours must be in 0.25 steps" });
+  }
+  // Example conditional rule:
+  if (val.nptType === "Contractual" && !val.contractualProcess) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["contractualProcess"], message: "Contractual process is required for Contractual NPT" });
+  }
+});
+Route integration (Express):
+File: server/routes/npt.ts
+
+ts
+Copy code
+import { nptCreateSchema } from "../schemas/npt";
+
+router.post("/api/npt-reports", async (req, res) => {
+  const parsed = nptCreateSchema.safeParse(req.body);
+  if (!parsed.success) {
+    const errors = parsed.error.flatten().fieldErrors;
+    return res.status(400).json({ errors }); // { hours: ["..."], date: ["..."], ... }
+  }
+
+  const payload = parsed.data;  // has year, month, day, snapped hours
+
+  // Persist (example with Prisma)
+  const created = await prisma.nptReport.create({
+    data: {
+      rigId: payload.rigId,
+      date: new Date(payload.date),
+      year: payload.year,
+      month: payload.month,
+      day: payload.day,
+      hours: payload.hours,
+      nptType: payload.nptType,
+      contractualProcess: payload.contractualProcess ?? null,
+      // ... map other fields
+    }
+  });
+
+  return res.status(201).json(created);
+});
+If you’re using Joi/Yup/class-validator instead of Zod
+
+Remove year and month from the request schema (make them optional or delete).
+
+After validation, compute year/month/day from date and snap hours, then insert.
+
+3) Client form: don’t require Year/Month; still display if needed
+File: client/src/components/npt/npt-form.tsx (or the file that renders the form row)
+
+What to change
+
+Ensure form submission sends only rigId, date, hours, nptType, and conditional fields (e.g., contractualProcess), not year and month.
+
+If you keep Year & Month inputs to mimic Excel UI, make them read-only and auto-fill from date change. They should not be required to submit.
+
+Example (React) on date change:
+
+tsx
+Copy code
+const onDateChange = (iso: string) => {
+  setForm(f => ({ ...f, date: iso }));
+  const d = new Date(iso);
+  setForm(f => ({ ...f, year: d.getUTCFullYear(), month: d.getUTCMonth() + 1 }));
+};
+Ensure submit payload doesn’t include required checks for year/month:
+
+ts
+Copy code
+const payload = {
+  rigId: form.rigId,
+  date: form.date,                // ISO (YYYY-MM-DD)
+  hours: form.hours,              // number
+  nptType: form.nptType,
+  contractualProcess: form.contractualProcess || undefined,
+  // ... other optional fields
+};
+4) Quarter-hour UI (you already added it) — keep both controls
+Number input snaps on blur to 0.25.
+
+Dropdown lists 0–24 by 0.25.
+
+Both bind to the same form.hours.
+
+Before submit, it’s fine to snap again:
+
+ts
+Copy code
+import { clamp, snapQuarter } from "@/lib/time";
+
+const onSubmit = () => {
+  const hours = snapQuarter(clamp(Number(form.hours ?? 0), 0, 24));
+  // send with `hours`
+};
+5) DB constraint (keeps the data clean)
+(You likely already have this; keep it.)
+
+sql
+Copy code
+ALTER TABLE npt_entries
+ADD CONSTRAINT chk_hours_quarter
+CHECK (hours >= 0 AND hours <= 24 AND (hours * 4)::int = hours * 4);
+6) Error messages: show field → message
+Server already returns { errors: { hours: ["..."], date: ["..."], ... } }.
+
+Client toast + inline:
+
+ts
+Copy code
+// toast summary
+if (res.status === 400 && res.data?.errors) {
+  const flat = Object.entries(res.data.errors)
+    .flatMap(([field, msgs]) => (msgs ?? []).map(m => `${field}: ${m}`));
+  showToast(`Validation errors:\n${flat.join("\n")}`);
+}
+
+// inline
+setFieldErrors(res.data.errors as Record<string, string[]>);
+Render under each control:
+
+tsx
+Copy code
+{fieldErrors?.hours?.map((m, i) => (
+  <div key={i} className="text-red-600 text-xs mt-1">{m}</div>
+))}
+7) How to test (exact steps)
+A. Zero hours allowed
+
+bash
+Copy code
+curl -X POST http://localhost:5000/api/npt-reports \
+  -H "Content-Type: application/json" \
+  -d '{ "rigId": 2, "date": "2025-01-06", "hours": 0, "nptType": "Contractual", "contractualProcess": "Test" }'
+Expect: 201 Created.
+
+B. Quarter-hour enforcement
+
+bash
+Copy code
+# invalid: 0.3
+curl -X POST http://localhost:5000/api/npt-reports \
+  -H "Content-Type: application/json" \
+  -d '{ "rigId": 2, "date": "2025-01-06", "hours": 0.3, "nptType": "Contractual", "contractualProcess": "Test" }'
+Expect: 400 with errors.hours[0] = "Hours must be in 0.25 steps".
+
+C. Year/Month no longer required
+
+bash
+Copy code
+# do NOT send year or month
+curl -X POST http://localhost:5000/api/npt-reports \
+  -H "Content-Type: application/json" \
+  -d '{ "rigId": 2, "date": "2025-05-01", "hours": 0.5, "nptType": "Contractual", "contractualProcess": "X" }'
+Expect: 201 Created and record has year=2025, month=5.
+
+Likely leftover places to change (quick checklist)
+ Any Yup/Zod schema on the client still requiring year/month? Make them optional or remove.
+
+ Any Joi/class-validator on the server still marking year/month as required? Remove, then derive.
+
+ Any business rule still enforcing hours > 0? Change to >= 0.
+
+ Form submit accidentally sending empty strings ("") for optional fields? Convert "" → undefined.

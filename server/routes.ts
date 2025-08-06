@@ -12,7 +12,7 @@ import { BillingProcessor } from "./billingProcessor";
 import { processPDFBilling, enhanceBillingRowWithNPTData } from "./pdfProcessor";
 import { workflowService } from "./workflowService";
 import { lifecycleService } from "./lifecycleService";
-import { insertNptReportSchema, insertRigSchema, insertSystemSchema, insertEquipmentSchema, insertDepartmentSchema, insertActionPartySchema, insertReportDeliverySchema, insertAlertRuleSchema } from "@shared/schema";
+import { serverNptReportSchema, insertRigSchema, insertSystemSchema, insertEquipmentSchema, insertDepartmentSchema, insertActionPartySchema, insertReportDeliverySchema, insertAlertRuleSchema } from "@shared/schema";
 import type { BillingSheetRow } from "@shared/billingTypes";
 import { z } from "zod";
 import multer from "multer";
@@ -375,18 +375,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      const validatedData = insertNptReportSchema.parse({
+      const parseResult = serverNptReportSchema.safeParse({
         ...req.body,
         userId,
         rigId: user.rigId || req.body.rigId, // Allow admin to specify rigId, fall back to user's rigId
       });
       
-      // Business rule validations
+      if (!parseResult.success) {
+        console.log("Zod validation error:", JSON.stringify(parseResult.error.errors, null, 2));
+        const fieldErrors = parseResult.error.flatten().fieldErrors;
+        return res.status(400).json({ 
+          message: "Validation failed", 
+          errors: Object.entries(fieldErrors).map(([field, messages]) => ({
+            path: [field],
+            message: messages?.[0] || "Invalid value"
+          }))
+        });
+      }
+      
+      const validatedData = parseResult.data;
+      
+      // Business rule validations (simplified since most are now in schema)
       const errors = validateNptReport(validatedData, user);
-      console.log("Validation errors for NPT report:", errors);
+      console.log("Business validation errors for NPT report:", errors);
       console.log("Validated data:", JSON.stringify(validatedData, null, 2));
       if (errors.length > 0) {
-        return res.status(400).json({ message: "Validation failed", errors });
+        return res.status(400).json({ 
+          message: "Validation failed", 
+          errors: errors.map(err => ({ message: err, path: [] }))
+        });
       }
       
       const report = await storage.createNptReport(validatedData);
@@ -1550,21 +1567,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   return httpServer;
 }
 
-// Business rule validation function
+// Simplified business rule validation function (most validations moved to schema)
 function validateNptReport(data: any, user: any): string[] {
   const errors: string[] = [];
   
-  // Hours validation - allow 0 hours as valid
-  if (data.hours < 0 || data.hours > 24) {
-    errors.push("Hours must be between 0 and 24");
-  }
-  
-  // NPT Type specific validations
-  if (data.nptType === 'Contractual') {
-    if (!data.contractualProcess?.trim()) {
-      errors.push("Contractual Process is required for Contractual NPT type");
-    }
-  } else if (data.nptType === 'Abraj') {
+  // NPT Type specific validations for Abraj (Contractual handled in schema)
+  if (data.nptType === 'Abraj') {
     if (!data.system) errors.push("System is required for Abraj NPT type");
     if (!data.parentEquipment) errors.push("Parent Equipment is required for Abraj NPT type");
     if (!data.partEquipment?.trim()) errors.push("Part Equipment is required for Abraj NPT type");
