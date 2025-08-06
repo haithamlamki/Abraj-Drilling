@@ -173,14 +173,7 @@ export class DatabaseStorage implements IStorage {
     return updatedUser;
   }
 
-  async updateUserPassword(id: string, password: string): Promise<User> {
-    const [user] = await db
-      .update(users)
-      .set({ password, updatedAt: new Date() })
-      .where(eq(users.id, id))
-      .returning();
-    return user;
-  }
+
 
   async deleteUser(id: string): Promise<void> {
     // Delete user-rig associations first
