@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -8,15 +8,40 @@ import { Form, FormControl, FormField, FormItem } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Info, Trash2 } from "lucide-react";
+import { Info, Trash2, Copy, Plus } from "lucide-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import { enabledFields, cleanupByType } from "@shared/nptRules";
 import type { BillingSheetRow } from "@shared/billingTypes";
+import { nanoid } from "nanoid";
+
+type NptRow = {
+  id: string;
+  rigNumber: string;
+  date: string;
+  year: string;
+  month: string;
+  hours: string;
+  nptType: string;
+  system: string;
+  equipment: string;
+  partEquipment: string;
+  contractualProcess: string;
+  immediateCause: string;
+  rootCause: string;
+  correctiveAction: string;
+  futureAction: string;
+  department: string;
+  actionParty: string;
+  wellName: string;
+  notificationNumber: string;
+  investigationWellName: string;
+};
 
 const nptRowSchema = z.object({
+  id: z.string(),
   rigNumber: z.string(),
   date: z.string(),
   year: z.string(),
@@ -44,6 +69,33 @@ const formSchema = z.object({
 
 type FormData = z.infer<typeof formSchema>;
 
+const makeEmptyRow = (): NptRow => {
+  const today = new Date();
+  const row: NptRow = {
+    id: nanoid(),
+    rigNumber: "",
+    year: today.getFullYear().toString(),
+    month: today.toLocaleString("en", { month: "short" }),
+    date: "",
+    hours: "0",
+    nptType: "Contractual",
+    system: "",
+    equipment: "",
+    partEquipment: "",
+    contractualProcess: "",
+    immediateCause: "",
+    rootCause: "",
+    correctiveAction: "",
+    futureAction: "",
+    department: "",
+    actionParty: "",
+    wellName: "",
+    notificationNumber: "",
+    investigationWellName: "",
+  };
+  return cleanupByType(row); // enforce locks on creation
+};
+
 interface NptFormMultiProps {
   billingData?: BillingSheetRow[];
 }
@@ -51,8 +103,8 @@ interface NptFormMultiProps {
 export default function NptFormMulti({ billingData }: NptFormMultiProps) {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
-  const [removedRows, setRemovedRows] = useState<number[]>([]);
   const [isSubmittingForReview, setIsSubmittingForReview] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   // Fetch reference data
   const { data: systems = [] } = useQuery<any[]>({
@@ -71,19 +123,20 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
     queryKey: ['/api/action-parties'],
   });
 
-  // Initialize form with billing data
-  const defaultRows = billingData?.map(row => ({
+  // Initialize rows with billing data or empty row
+  const initialRows: NptRow[] = billingData?.map(row => ({
+    id: nanoid(),
     rigNumber: row.rigNumber || '',
     date: row.date ? new Date(row.date).toISOString().split('T')[0] : '',
     year: row.year || '',
     month: row.month || '',
-    hours: row.hours || '',
+    hours: row.hours?.toString() || '',
     nptType: row.nbtType || '',
     system: row.extractedSystem || row.system || '',
     equipment: row.extractedEquipment || '',
     partEquipment: row.extractedFailure || '',
-    contractualProcess: row.nbtType === 'Contractual' ? row.description : '',
-    immediateCause: row.nbtType === 'Abroad' ? row.description : '',
+    contractualProcess: row.nbtType === 'Contractual' ? row.description || '' : '',
+    immediateCause: row.nbtType === 'Abraj' ? row.description || '' : '',
     rootCause: '',
     correctiveAction: '',
     futureAction: '',
@@ -92,22 +145,116 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
     wellName: '',
     notificationNumber: '',
     investigationWellName: '',
-  })) || [];
+  })) || [makeEmptyRow()];
+
+  const [rows, setRows] = useState<NptRow[]>(initialRows);
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      rows: defaultRows,
+      rows: initialRows,
     },
   });
 
+  // Update form when rows change
+  useEffect(() => {
+    form.setValue('rows', rows);
+  }, [rows, form]);
+
+  // Row management functions
+  const toggleRowSelect = (id: string, checked: boolean) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      checked ? next.add(id) : next.delete(id);
+      return next;
+    });
+  };
+
+  const addRow = (afterIndex?: number) => {
+    const newRow = makeEmptyRow();
+    setRows(prev => {
+      const copy = [...prev];
+      if (afterIndex == null) copy.push(newRow);
+      else copy.splice(afterIndex + 1, 0, newRow);
+      return copy;
+    });
+  };
+
+  const duplicateRow = (index: number) => {
+    setRows(prev => {
+      const copy = [...prev];
+      const base = copy[index];
+      const dupe: NptRow = cleanupByType({ ...base, id: nanoid() });
+      copy.splice(index + 1, 0, dupe);
+      return copy;
+    });
+  };
+
+  const duplicateSelected = () => {
+    if (!selected.size) return;
+    setRows(prev => {
+      const copy = [...prev];
+      // insert duplicates right after each selected row (keep order stable)
+      for (let i = copy.length - 1; i >= 0; i--) {
+        if (selected.has(copy[i].id)) {
+          const dupe = cleanupByType({ ...copy[i], id: nanoid() });
+          copy.splice(i + 1, 0, dupe);
+        }
+      }
+      return copy;
+    });
+    setSelected(new Set()); // clear selection after duplication
+  };
+
+  const removeRow = (index: number) => {
+    const rowId = rows[index].id;
+    setRows(prev => prev.filter((_, i) => i !== index));
+    setSelected(prev => {
+      const next = new Set(prev);
+      next.delete(rowId);
+      return next;
+    });
+  };
+
+  // Update row field and apply cleanup when NPT type changes
+  const updateRowField = (index: number, field: keyof NptRow, value: any) => {
+    setRows(prev => {
+      const copy = [...prev];
+      const updated = { ...copy[index], [field]: value };
+      // Apply cleanup when NPT type changes
+      if (field === 'nptType') {
+        copy[index] = cleanupByType(updated);
+      } else {
+        copy[index] = updated;
+      }
+      return copy;
+    });
+  };
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "d") {
+        e.preventDefault();
+        // duplicate the last selected row
+        const last = [...selected].pop();
+        if (!last) return;
+        const idx = rows.findIndex(r => r.id === last);
+        if (idx >= 0) duplicateRow(idx);
+      }
+      if (e.altKey && e.key === "Insert") {
+        e.preventDefault();
+        addRow();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [rows, selected]);
+
   const createReportsMutation = useMutation({
     mutationFn: async (data: FormData) => {
-      // Filter out removed rows
-      const activeRows = data.rows.filter((_, index) => !removedRows.includes(index));
-      
-      // Convert to billing sheet row format for API
-      const billingRows = activeRows.map(row => ({
+      // Convert rows to billing sheet row format for API
+      const billingRows = data.rows.map(row => ({
         rigNumber: row.rigNumber,
         date: new Date(row.date),
         year: row.year,
@@ -170,12 +317,6 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
     createReportsMutation.mutate(data);
   };
 
-  const removeRow = (index: number) => {
-    setRemovedRows([...removedRows, index]);
-  };
-
-  const rows = form.watch("rows");
-
   return (
     <Card className="border-0 shadow-none">
       <CardHeader className="px-0">
@@ -196,11 +337,59 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
               <p className="text-xs text-green-700">19-column format matching Excel structure - enter data cell by cell</p>
             </div>
 
+            {/* Toolbar */}
+            <div className="flex items-center gap-3 mb-4 p-2 bg-gray-50 border border-gray-200 rounded-lg">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => addRow()}
+                data-testid="button-add-row"
+                className="flex items-center gap-2"
+              >
+                <Plus className="h-4 w-4" />
+                Add row
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={duplicateSelected}
+                disabled={selected.size === 0}
+                data-testid="button-duplicate-selected"
+                className="flex items-center gap-2"
+                title="Duplicate selected rows"
+              >
+                <Copy className="h-4 w-4" />
+                Duplicate selected ({selected.size})
+              </Button>
+              {selected.size > 0 && (
+                <span className="text-xs text-gray-600">
+                  {selected.size} row{selected.size > 1 ? 's' : ''} selected
+                </span>
+              )}
+            </div>
+
             <div className="border border-gray-300 rounded-lg overflow-hidden">
               <table className="w-full border-collapse">
                 <thead>
-                  {/* Column Headers - matching single form style */}
+                  {/* Column Headers - with selection and actions columns */}
                   <tr className="bg-gray-100 border-b border-gray-300">
+                    <th className="p-2 border-r border-gray-300 text-center text-xs font-medium text-gray-700 w-8">
+                      <input
+                        type="checkbox"
+                        checked={rows.length > 0 && rows.every(row => selected.has(row.id))}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelected(new Set(rows.map(row => row.id)));
+                          } else {
+                            setSelected(new Set());
+                          }
+                        }}
+                        data-testid="checkbox-select-all"
+                        title="Select all rows"
+                      />
+                    </th>
                     <th className="p-2 border-r border-gray-300 text-center text-xs font-medium text-gray-700">
                       Rig Number
                     </th>
@@ -258,20 +447,28 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
                     <th className="p-2 border-r border-gray-300 text-center text-xs font-medium text-gray-700">
                       Well Name
                     </th>
-                    <th className="p-2 text-center text-xs font-medium text-gray-700">
-                      Remove
+                    <th className="p-2 text-center text-xs font-medium text-gray-700 w-20">
+                      Actions
                     </th>
                   </tr>
                 </thead>
                 <tbody>
                   {rows.map((row, index) => {
-                    if (removedRows.includes(index)) return null;
-                    
                     // Calculate enabled fields for this row based on NPT type
                     const enabledFieldsState = enabledFields({ nptType: row.nptType });
                     
                     return (
-                      <tr key={index} className="bg-white border-b border-gray-200">
+                      <tr key={row.id} className="bg-white border-b border-gray-200">
+                        {/* Selection checkbox */}
+                        <td className="p-1 border-r border-gray-200">
+                          <input
+                            type="checkbox"
+                            checked={selected.has(row.id)}
+                            onChange={(e) => toggleRowSelect(row.id, e.target.checked)}
+                            data-testid={`checkbox-select-row-${index}`}
+                            className="rounded border-gray-300"
+                          />
+                        </td>
                         {/* Rig Number (A) */}
                         <td className="p-1 border-r border-gray-200">
                           <FormField
@@ -349,25 +546,18 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
 
                         {/* NPT Type (F) */}
                         <td className="p-1 border-r border-gray-200">
-                          <FormField
-                            control={form.control}
-                            name={`rows.${index}.nptType`}
-                            render={({ field }) => (
-                              <FormItem>
-                                <Select onValueChange={field.onChange} value={field.value}>
-                                  <FormControl>
-                                    <SelectTrigger className="h-8 text-xs border-0 rounded-none">
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                  </FormControl>
-                                  <SelectContent>
-                                    <SelectItem value="Abraj">Abraj</SelectItem>
-                                    <SelectItem value="Contractual">Contractual</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              </FormItem>
-                            )}
-                          />
+                          <Select
+                            value={row.nptType}
+                            onValueChange={(value) => updateRowField(index, 'nptType', value)}
+                          >
+                            <SelectTrigger className="h-8 text-xs border-0 rounded-none">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Abraj">Abraj</SelectItem>
+                              <SelectItem value="Contractual">Contractual</SelectItem>
+                            </SelectContent>
+                          </Select>
                         </td>
 
                         {/* System (G) */}
@@ -649,17 +839,32 @@ export default function NptFormMulti({ billingData }: NptFormMultiProps) {
                           />
                         </td>
 
-                        {/* Remove button */}
+                        {/* Actions: Duplicate and Remove */}
                         <td className="p-1">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => removeRow(index)}
-                            className="h-8 w-8 p-0"
-                          >
-                            <Trash2 className="h-4 w-4 text-red-500" />
-                          </Button>
+                          <div className="flex items-center justify-center gap-1">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => duplicateRow(index)}
+                              className="h-6 w-6 p-0"
+                              title="Duplicate row"
+                              data-testid={`button-duplicate-row-${index}`}
+                            >
+                              <Copy className="h-3 w-3 text-blue-500" />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => removeRow(index)}
+                              className="h-6 w-6 p-0"
+                              title="Remove row"
+                              data-testid={`button-remove-row-${index}`}
+                            >
+                              <Trash2 className="h-3 w-3 text-red-500" />
+                            </Button>
+                          </div>
                         </td>
                       </tr>
                     );

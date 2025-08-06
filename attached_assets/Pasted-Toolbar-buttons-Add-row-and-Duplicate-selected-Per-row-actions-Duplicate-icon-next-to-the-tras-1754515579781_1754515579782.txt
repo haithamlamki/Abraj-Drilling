@@ -1,0 +1,238 @@
+Toolbar buttons: + Add row and Duplicate selected.
+
+Per-row actions: Duplicate icon next to the trash (remove) icon.
+
+Selection: checkbox per row (multi-select duplicate supported).
+
+Clean data: every new/duplicated row passes through cleanupByType so Contractual/Abraj locks stay valid.
+
+1) Types & helpers (top of npt-form-multi.tsx)
+ts
+Copy code
+import { nanoid } from "nanoid";
+import { enabledFields, cleanupByType } from "@/shared/nptRules";
+
+type NptRow = {
+  id: string;
+  rigNumber: string | number;
+  year: number;
+  month: string | number;
+  date: string;            // your component uses a date picker; keep string/ISO
+  hours: number;
+  nptType: string;
+  system: string;
+  equipment: string;
+  thePart: string;
+  contractualProcess: string;
+  department: string;
+  failureDesc: string;
+  rootCause: string;
+  corrective: string;
+  futureAction: string;
+  actionParty: string;
+  n2Number: string;
+  investigationFileId?: string;
+  investigationAiText?: string;
+  wellName?: string;
+};
+
+const makeEmptyRow = (): NptRow => {
+  const today = new Date();
+  const row: NptRow = {
+    id: nanoid(),
+    rigNumber: "",         // default to last used if you prefer
+    year: today.getFullYear(),
+    month: today.toLocaleString("en", { month: "short" }), // or numeric
+    date: "",
+    hours: 0,
+    nptType: "Contractual", // or "Abraj" if that’s your default
+    system: "",
+    equipment: "",
+    thePart: "",
+    contractualProcess: "",
+    department: "",
+    failureDesc: "",
+    rootCause: "",
+    corrective: "",
+    futureAction: "",
+    actionParty: "",
+    n2Number: "",
+    investigationFileId: "",
+    investigationAiText: "",
+    wellName: "",
+  };
+  return cleanupByType(row); // enforce locks on creation
+};
+2) Component state for rows + selection
+ts
+Copy code
+const [rows, setRows] = useState<NptRow[]>(initialRowsFromParser);
+const [selected, setSelected] = useState<Set<string>>(new Set());
+
+const toggleRowSelect = (id: string, checked: boolean) => {
+  setSelected(prev => {
+    const next = new Set(prev);
+    checked ? next.add(id) : next.delete(id);
+    return next;
+  });
+};
+3) Add / duplicate / remove
+ts
+Copy code
+const addRow = (afterIndex?: number) => {
+  const newRow = makeEmptyRow();
+  setRows(prev => {
+    const copy = [...prev];
+    if (afterIndex == null) copy.push(newRow);
+    else copy.splice(afterIndex + 1, 0, newRow);
+    return copy;
+  });
+};
+
+const duplicateRow = (index: number) => {
+  setRows(prev => {
+    const copy = [...prev];
+    const base = copy[index];
+    const dupe: NptRow = cleanupByType({ ...base, id: nanoid() });
+    copy.splice(index + 1, 0, dupe);
+    return copy;
+  });
+};
+
+const duplicateSelected = () => {
+  if (!selected.size) return;
+  setRows(prev => {
+    const copy = [...prev];
+    // insert duplicates right after each selected row (keep order stable)
+    for (let i = copy.length - 1; i >= 0; i--) {
+      if (selected.has(copy[i].id)) {
+        const dupe = cleanupByType({ ...copy[i], id: nanoid() });
+        copy.splice(i + 1, 0, dupe);
+      }
+    }
+    return copy;
+  });
+};
+
+const removeRow = (index: number) => {
+  setRows(prev => prev.filter((_, i) => i !== index));
+};
+4) Toolbar UI (above the table)
+tsx
+Copy code
+<div className="flex items-center gap-2 mb-2">
+  <button className="btn btn-primary" onClick={() => addRow()}>
+    + Add row
+  </button>
+  <button
+    className="btn btn-secondary"
+    onClick={duplicateSelected}
+    disabled={selected.size === 0}
+    title="Duplicate selected rows"
+  >
+    Duplicate selected
+  </button>
+</div>
+5) Table: selection & per-row actions
+Add a Select column and Actions column:
+
+tsx
+Copy code
+<thead>
+  <tr>
+    <th style={{width: 28}}></th> {/* checkbox column */}
+    {/* ... your existing headers ... */}
+    <th style={{width: 70}}>Remove</th>
+  </tr>
+</thead>
+
+<tbody>
+  {rows.map((row, i) => {
+    const ef = enabledFields(row.nptType);
+    return (
+      <tr key={row.id}>
+        {/* selection checkbox */}
+        <td>
+          <input
+            type="checkbox"
+            checked={selected.has(row.id)}
+            onChange={(e) => toggleRowSelect(row.id, e.target.checked)}
+          />
+        </td>
+
+        {/* ... your existing cells, with disabled={!ef.<field>} ... */}
+        {/* Example for NPT Type change: */}
+        <td>
+          <Select
+            value={row.nptType}
+            onValueChange={(val) => {
+              setRows(prev => {
+                const copy = [...prev];
+                const updated = cleanupByType({ ...copy[i], nptType: val });
+                copy[i] = updated;
+                return copy;
+              });
+            }}
+            /* ... */
+          />
+        </td>
+
+        {/* Remove/duplicate cell */}
+        <td className="text-right">
+          <button
+            className="icon-btn"
+            title="Duplicate row"
+            onClick={() => duplicateRow(i)}
+          >
+            📄
+          </button>
+          <button
+            className="icon-btn ml-2"
+            title="Remove row"
+            onClick={() => removeRow(i)}
+          >
+            🗑
+          </button>
+        </td>
+      </tr>
+    );
+  })}
+</tbody>
+Any time nptType changes, we wrap the new row in cleanupByType so locked fields are cleared and stay consistent.
+
+6) Optional shortcuts (nice UX)
+ts
+Copy code
+useEffect(() => {
+  const onKey = (e: KeyboardEvent) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "d") {
+      e.preventDefault();
+      // duplicate the last selected row
+      const last = [...selected].pop();
+      if (!last) return;
+      const idx = rows.findIndex(r => r.id === last);
+      if (idx >= 0) duplicateRow(idx);
+    }
+    if (e.altKey && e.key === "Insert") {
+      e.preventDefault();
+      addRow();
+    }
+  };
+  window.addEventListener("keydown", onKey);
+  return () => window.removeEventListener("keydown", onKey);
+}, [rows, selected]);
+7) Submission stays unchanged
+Your bulk submit code continues to validate rows with nptEntrySchema.safeParse(row) and post the array. New/duplicated rows are just additional items.
+
+8) Quick test
+Click + Add row → new blank row appears at bottom with correct locks.
+
+Click row’s 📄 Duplicate → a copy appears right below it.
+
+Select multiple rows → Duplicate selected adds a copy after each selected row.
+
+Change an Abraj row to Contractual → equipment/failure/cause are cleared and locked.
+
+Submit: validation still applies (N2/investigation windows, etc.).
+
+If you want the new row to inherit rig/date/system from the last row, change makeEmptyRow() to pull from rows[rows.length-1].
