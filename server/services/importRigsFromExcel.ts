@@ -13,13 +13,30 @@ export async function importRigsFromExcel(filePath: string) {
     const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
     
     // Map Excel columns to database fields
-    const rigsData = jsonData.map((row: any) => ({
-      rigNumber: parseInt(String(row["Rig Number"] || row["Rig#"] || row["RigNumber"] || "").trim()) || 0,
-      section: String(row["Section"] || row["Department"] || "").trim(),
-      client: String(row["Client"] || row["Company"] || "").trim(), 
-      location: String(row["Location"] || row["Area"] || "").trim(),
-      isActive: validateStatus(row["Status"]),
-    })).filter(r => r.rigNumber > 0); // Only include rows with valid rig numbers
+    const rigsData = jsonData.map((row: any) => {
+      const rawRigNumber = String(row["Rig Number"] || row["Rig#"] || row["RigNumber"] || "").trim();
+      let rigNumber: number;
+      let rigName: string | undefined;
+      
+      // Handle special rig names like "Hoist 1", "Hoist 2", etc.
+      if (rawRigNumber.toLowerCase().startsWith('hoist')) {
+        const hoistNum = rawRigNumber.match(/\d+/)?.[0];
+        rigNumber = hoistNum ? 9000 + parseInt(hoistNum) : 0; // Map Hoist 1->9001, Hoist 2->9002, etc.
+        rigName = rawRigNumber; // Store original name
+      } else {
+        rigNumber = parseInt(rawRigNumber) || 0;
+        rigName = undefined;
+      }
+      
+      return {
+        rigNumber,
+        rigName,
+        section: String(row["Section"] || row["Department"] || "").trim(),
+        client: String(row["Client"] || row["Company"] || "").trim(), 
+        location: String(row["Location"] || row["Area"] || "").trim(),
+        isActive: validateStatus(row["Status"]),
+      };
+    }).filter(r => r.rigNumber > 0); // Only include rows with valid rig numbers
     
     if (rigsData.length === 0) {
       throw new Error("No valid rig data found in Excel file");
@@ -32,6 +49,7 @@ export async function importRigsFromExcel(filePath: string) {
         .onConflictDoUpdate({
           target: rigs.rigNumber,
           set: {
+            rigName: rig.rigName,
             section: rig.section,
             client: rig.client,
             location: rig.location,

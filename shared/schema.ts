@@ -45,11 +45,13 @@ export const users = pgTable("users", {
 export const rigs = pgTable("rigs", {
   id: serial("id").primaryKey(),
   rigNumber: integer("rig_number").unique().notNull(),
+  rigName: varchar("rig_name"), // Optional display name for special rigs like "Hoist 1"
   section: varchar("section").notNull(), // drilling/hoist
   client: varchar("client"),
   location: varchar("location"),
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 // User-Rig junction table for many-to-many relationship
