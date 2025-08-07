@@ -4,7 +4,8 @@ import { rigs } from "@shared/schema";
 export async function importRigsFromExcel(filePath: string) {
   try {
     // Use dynamic import for xlsx
-    const XLSX = await import("xlsx");
+    const XLSXModule = await import("xlsx");
+    const XLSX = XLSXModule.default;
     
     // Read the Excel file
     const workbook = XLSX.readFile(filePath);
