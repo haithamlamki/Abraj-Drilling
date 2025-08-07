@@ -683,9 +683,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Only admins can create rigs" });
       }
       
-      const validatedData = insertRigSchema.parse(req.body);
-      const rig = await storage.createRig(validatedData);
-      res.status(201).json(rig);
+      // Handle bulk upsert if array is provided
+      const payload = Array.isArray(req.body) ? req.body : [req.body];
+      const upserted: any[] = [];
+      
+      for (const rigData of payload) {
+        const validatedData = insertRigSchema.parse(rigData);
+        
+        // Check if rig exists
+        const existingRig = await storage.getRigByNumber(validatedData.rigNumber);
+        if (existingRig) {
+          // Update existing rig
+          const updated = await storage.updateRig(existingRig.id, validatedData);
+          upserted.push(updated);
+        } else {
+          // Create new rig
+          const created = await storage.createRig(validatedData);
+          upserted.push(created);
+        }
+      }
+      
+      res.status(201).json({ 
+        success: true, 
+        saved: upserted.length,
+        rigs: upserted
+      });
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: "Validation failed", errors: error.errors });
@@ -756,60 +778,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Only Excel files (.xlsx, .xls) are supported" });
       }
 
-      // Parse Excel file
-      const xlsx = require('xlsx');
-      const workbook = xlsx.read(req.file.buffer, { type: 'buffer' });
-      const firstSheetName = workbook.SheetNames[0];
-      const worksheet = workbook.Sheets[firstSheetName];
-      const data = xlsx.utils.sheet_to_json(worksheet);
+      // Save file temporarily
+      const fs = await import('fs');
+      const path = await import('path');
+      const tmpPath = path.join('/tmp', `rigs_${Date.now()}.${fileExtension}`);
+      await fs.promises.writeFile(tmpPath, req.file.buffer);
 
-      let imported = 0;
-      const errors: string[] = [];
+      // Import rigs using the service
+      const { importRigsFromExcel } = await import('./services/importRigsFromExcel.js');
+      const result = await importRigsFromExcel(tmpPath);
 
-      // Process each row
-      for (const row of data) {
-        try {
-          // Map the Excel columns to our rig data structure
-          const rigData = {
-            rigNumber: parseInt(String(row['Rig Number'] || row['RigNumber'] || row['Rig'] || '').trim()),
-            section: String(row['Section'] || row['Unit'] || 'KOC').trim(),
-            client: String(row['Client'] || row['Company'] || 'Kuwait Oil Company').trim(),
-            location: String(row['Location'] || row['Field'] || '').trim(),
-            isActive: row['Status'] ? String(row['Status']).toLowerCase() === 'active' : true
-          };
-
-          // Validate required fields
-          if (!rigData.rigNumber) {
-            errors.push(`Row ${imported + 1}: Missing rig number`);
-            continue;
-          }
-
-          // Check if rig already exists
-          const existingRig = await storage.getRigByNumber(rigData.rigNumber);
-          if (existingRig) {
-            // Update existing rig
-            await storage.updateRig(existingRig.id, rigData);
-          } else {
-            // Create new rig
-            await storage.createRig(rigData);
-          }
-          
-          imported++;
-        } catch (error) {
-          errors.push(`Row ${imported + 1}: ${error instanceof Error ? error.message : 'Unknown error'}`);
-        }
-      }
+      // Clean up temp file
+      await fs.promises.unlink(tmpPath);
 
       res.json({
-        message: `Import completed: ${imported} rigs processed`,
-        imported,
-        total: data.length,
-        errors: errors.length > 0 ? errors : undefined
+        message: `Import completed: ${result.imported} rigs processed`,
+        ...result
       });
 
     } catch (error) {
       console.error("Error importing rigs:", error);
-      res.status(500).json({ message: "Failed to import rigs" });
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Failed to import rigs" 
+      });
     }
   });
 

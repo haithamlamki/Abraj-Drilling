@@ -1,0 +1,156 @@
+1 Database
+shared/schema.ts (Drizzle example)
+
+ts
+Copy code
+export const rigs = pgTable("rigs", {
+  id:            serial("id").primaryKey(),
+  rigNumber:     varchar("rig_number", { length: 10 }).notNull().unique(),
+  section:       varchar("section", { length: 50 }),          // Drilling / Workover …
+  client:        varchar("client", { length: 50 }),
+  location:      varchar("location", { length: 100 }),
+  status:        varchar("status", { length: 20 })
+     .$type<"Active" | "Stacked" | "Maintenance">()
+     .default("Active"),
+  createdAt:     timestamp("created_at").defaultNow(),
+  updatedAt:     timestamp("updated_at").defaultNow(),
+});
+After adding the table, run your migration (drizzle-kit push, prisma migrate dev, etc.).
+
+2 API Routes
+server/routes.ts
+
+ts
+Copy code
+// list all rigs
+router.get("/api/rigs", auth("admin"), async (_, res) => {
+  const all = await db.select().from(rigs).orderBy(rigs.rigNumber);
+  res.json(all);
+});
+
+// upsert single rig OR bulk array
+router.post("/api/rigs", auth("admin"), async (req, res) => {
+  const payload = Array.isArray(req.body) ? req.body : [req.body];
+  await db.insert(rigs).values(payload).onConflictDoUpdate({
+    target: rigs.rigNumber,
+    set: (row) => row,
+  });
+  res.json({ ok: true, saved: payload.length });
+});
+3 Excel Import
+Service
+server/services/importRigsFromExcel.ts
+
+ts
+Copy code
+import * as XLSX from "xlsx";
+export async function importRigs(filePath: string) {
+  const wb = XLSX.readFile(filePath);
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const json = XLSX.utils.sheet_to_json(ws, { defval: "" });
+
+  const rows = json.map((r: any) => ({
+    rigNumber: String(r["Rig Number"]).trim(),
+    section:   String(r["Section"]).trim(),
+    client:    String(r["Client"]).trim(),
+    location:  String(r["Location"]).trim(),
+    status:    (r["Status"] || "Active").trim(),
+  }));
+  await db.insert(rigs).values(rows).onConflictDoUpdate({
+    target: rigs.rigNumber,
+    set: (row) => row,
+  });
+  return rows.length;
+}
+Route
+ts
+Copy code
+router.post("/api/rigs/import", auth("admin"),
+  upload.single("file"), async (req, res) => {
+    const saved = await importRigs(req.file.path);
+    res.json({ ok: true, saved });
+});
+4 Admin UI
+client/src/pages/rigs.tsx
+
+tsx
+Copy code
+import { DataTable } from "@/components/ui/data-table";
+import { useQuery, useMutation } from "@tanstack/react-query";
+
+export default function RigsPage() {
+  const rigsQ = useQuery(["rigs"], () => fetch("/api/rigs").then(r=>r.json()));
+  const upsert = useMutation((body) =>
+    fetch("/api/rigs", { method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body:JSON.stringify(body) }),
+    { onSuccess: () => rigsQ.refetch() }
+  );
+
+  const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files?.[0]) return;
+    const form = new FormData();
+    form.append("file", e.target.files[0]);
+    await fetch("/api/rigs/import",{ method:"POST", body:form });
+    rigsQ.refetch();
+  };
+
+  const columns = [
+    { accessorKey:"rigNumber", header:"Rig #",      cell: Editable },
+    { accessorKey:"section",   header:"Section",    cell: Editable },
+    { accessorKey:"client",    header:"Client",     cell: Editable },
+    { accessorKey:"location",  header:"Location",   cell: Editable },
+    { accessorKey:"status",    header:"Status",     cell: SelectStatus },
+  ];
+
+  return (
+    <div className="p-6 space-y-4">
+      <h1 className="text-2xl font-semibold">Rig Registry</h1>
+
+      <div className="flex items-center gap-3">
+        <button className="btn btn-primary"
+          onClick={() => upsert.mutate({ rigNumber:"", status:"Active" })}>
+          + Add Rig
+        </button>
+
+        <label className="btn btn-secondary cursor-pointer">
+          Import Excel
+          <input type="file" accept=".xlsx,.xls" hidden onChange={onFile}/>
+        </label>
+      </div>
+
+      <DataTable
+        data={rigsQ.data ?? []}
+        columns={columns}
+        onRowChange={(row) => upsert.mutate(row)}  // inline save
+      />
+    </div>
+  );
+}
+Editable / SelectStatus can reuse your existing shadcn inputs.
+
+5 Excel Template
+Rig Number	Section	Client	Location	Status
+203	Drilling	PDO	Oman	Active
+204	Drilling	Medco	Oman	Stacked
+
+Sheet name doesn’t matter (first sheet is used).
+
+Column headers must match exactly.
+
+Allowed Status: Active, Stacked, Maintenance (defaults to Active).
+
+6 Quick Test
+Log in as Admin → Settings › Rigs.
+
+Click Import Excel, choose Rigs Information.xlsx.
+
+Table should instantly fill; rig numbers now appear in NPT dropdowns.
+
+Edit a cell (e.g., Location) — it auto-saves (upsert).
+
+Click + Add Rig, type values, blur the cell — saves.
+
+Verify that Rig dropdowns in NPT forms reflect the new/edited rigs.
+
+That’s it — a live, editable rig registry with Excel bulk import!
