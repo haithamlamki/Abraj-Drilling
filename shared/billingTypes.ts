@@ -38,3 +38,18 @@ export interface BillingUpload {
   processingStatus: string;
   errorMessage?: string;
 }
+
+export interface BillingSheetUpload {
+  fileName: string;
+  uploadedBy: string;
+  status: string;
+  result: BillingUploadResult;
+}
+
+export interface BillingUploadResult {
+  extractedRows: BillingSheetRow[];
+  processingStatus: 'completed' | 'processing' | 'failed';
+  errorMessage?: string;
+  importedCount?: number;
+  skippedCount?: number;
+}
