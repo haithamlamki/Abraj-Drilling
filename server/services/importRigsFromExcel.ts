@@ -1,16 +1,16 @@
-import * as XLSX from "xlsx";
+import { readFile, utils } from "xlsx";
 import { db } from "../db.js";
 import { rigs } from "@shared/schema";
 
 export async function importRigsFromExcel(filePath: string) {
   try {
     // Read the Excel file
-    const workbook = XLSX.readFile(filePath);
+    const workbook = readFile(filePath);
     const sheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[sheetName];
     
     // Convert to JSON with default values for missing cells
-    const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+    const jsonData = utils.sheet_to_json(worksheet, { defval: "" });
     
     // Map Excel columns to database fields
     const rigsData = jsonData.map((row: any) => {
