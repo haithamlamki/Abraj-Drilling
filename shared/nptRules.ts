@@ -26,11 +26,13 @@ export function enabledFields(nptType?: string) {
 
     // Equipment/Failure/Cause group (editable only in Abraj):
     equipment: A,
-    thePart: A,
-    failureDesc: A,
+    parentEquipment: A,
+    immediateCause: A,
     rootCause: A,
     corrective: A,
     futureAction: A,
+            correctiveAction: A,
+
     actionParty: A,
 
     n2Number: true,                // editable; requirement stays conditional
@@ -56,6 +58,10 @@ export function cleanupByType<T extends Record<string, any>>(row: T): T {
     if ('rootCause' in out) (out as any).rootCause = "";
     if ('corrective' in out) (out as any).corrective = "";
     if ('futureAction' in out) (out as any).futureAction = "";
+        if ('parentEquipment' in out) (out as any).parentEquipment = "";
+    if ('immediateCause' in out) (out as any).immediateCause = "";
+    if ('correctiveAction' in out) (out as any).correctiveAction = "";
+
     if ('actionParty' in out) (out as any).actionParty = "";
   }
   return out;
